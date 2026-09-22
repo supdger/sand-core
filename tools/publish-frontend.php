@@ -10,6 +10,20 @@ function fail(string $message): never
     exit(1);
 }
 
+function packageVersion(string $package): string
+{
+    if (!class_exists(\Composer\InstalledVersions::class, false)) {
+        $autoload = dirname(__DIR__, 3) . '/autoload.php';
+        if (is_file($autoload)) {
+            require_once $autoload;
+        }
+    }
+
+    return class_exists(\Composer\InstalledVersions::class, false)
+        ? (\Composer\InstalledVersions::getPrettyVersion($package) ?? 'dev-main')
+        : 'dev-main';
+}
+
 function normalizePath(string $path): string
 {
     $normalized = str_replace('\\', '/', $path);
@@ -128,9 +142,7 @@ if ($installed !== null) {
 
 $files = sourceManifest($source);
 copyTree($source, $target);
-$version = class_exists(\Composer\InstalledVersions::class)
-    ? (\Composer\InstalledVersions::getPrettyVersion('supdger/sand-core') ?? 'dev-main')
-    : 'dev-main';
+$version = packageVersion('supdger/sand-core');
 $manifest = [
     'schema' => 1,
     'package' => 'supdger/sand-core',

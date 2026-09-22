@@ -7,6 +7,7 @@ $publisher = $packageRoot . '/tools/publish-frontend.php';
 $root = sys_get_temp_dir() . '/sand-core-publish-' . bin2hex(random_bytes(6));
 $first = $root . '/first';
 $modified = $root . '/modified';
+$installedRoot = $root . '/installed';
 
 function runPublisher(string $publisher, string $target): array
 {
@@ -49,6 +50,27 @@ try {
     [$code, $output] = runPublisher($publisher, $modified);
     if ($code === 0 || !str_contains($output, '拒绝覆盖已修改的前端源码')) {
         throw new RuntimeException("未知修改未被拒绝：{$output}");
+    }
+
+    $installedPackage = $installedRoot . '/vendor/supdger/sand-core';
+    mkdir($installedPackage . '/tools', 0777, true);
+    mkdir($installedPackage . '/sandadmin-artd', 0777, true);
+    copy($publisher, $installedPackage . '/tools/publish-frontend.php');
+    file_put_contents($installedPackage . '/sandadmin-artd/package.json', "{}\n");
+    file_put_contents(
+        $installedRoot . '/vendor/autoload.php',
+        "<?php\nnamespace Composer;\nfinal class InstalledVersions { public static function getPrettyVersion(string \$package): ?string { return \$package === 'supdger/sand-core' ? '0.1.1' : null; } }\n"
+    );
+    [$code, $output] = runPublisher(
+        $installedPackage . '/tools/publish-frontend.php',
+        $installedRoot . '/published'
+    );
+    $installedManifest = json_decode(
+        (string) file_get_contents($installedRoot . '/published/.sand-core-source-manifest.json'),
+        true
+    );
+    if ($code !== 0 || ($installedManifest['version'] ?? null) !== '0.1.1') {
+        throw new RuntimeException("安装形态未记录 Composer 版本：{$output}");
     }
 
     fwrite(STDOUT, "publish frontend tests passed\n");

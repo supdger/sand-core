@@ -29,7 +29,7 @@ if (!class_exists(\plugin\sandadmin\utils\Arr::class)) {
     throw new RuntimeException('SandAdmin runtime namespace is not loadable');
 }
 $app = require $root . '/server/plugin/sandadmin/config/app.php';
-if (($app['version'] ?? null) !== '0.1.0') {
+if (($app['version'] ?? null) !== '0.1.1') {
     throw new RuntimeException('SandAdmin app config is not discoverable');
 }
 foreach (['route.php', 'middleware.php', 'process.php', 'autoload.php'] as $config) {
