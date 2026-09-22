@@ -8,14 +8,8 @@ SandAdmin 的 Composer 核心包，包含：
 安装后端：
 
 ```bash
-composer config repositories.sand-core vcs https://github.com/supdger/sand-core
 composer require supdger/sand-core:^0.1
 ```
 
-前端源码不会自动安装依赖或编译。将源码发布到 `vendor` 外的开发目录：
-
-```bash
-php vendor/supdger/sand-core/tools/publish-frontend.php ../sandadmin-artd
-```
-
-发布工具不会静默覆盖未知修改。
+Composer 安装或更新时，Webman 插件安装钩子会将匹配版本的前端源码自动发布到
+宿主的 `sandadmin-artd/`。它不会安装 Node.js 依赖或执行编译，也不会静默覆盖未知修改。
