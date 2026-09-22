@@ -1,0 +1,253 @@
+@reference '@styles/core/tailwind.css';
+
+/* The form is an independent responsive layer; it does not depend on a background image. */
+
+.login-page {
+  position: relative;
+  width: 100%;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #07141f;
+}
+
+.login-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100svh;
+}
+
+.auth-right-wrap {
+  position: absolute;
+  top: 11.9svh;
+  left: 53.53vw;
+  z-index: 2;
+  width: min(39.47vw, 626px);
+  min-width: 500px;
+}
+
+.login-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 75.5svh;
+  padding: clamp(52px, 6.45svh, 64px) clamp(46px, 4.41vw, 70px) 44px;
+  background: rgb(255 253 249 / 99%);
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 17px;
+  box-shadow: 0 30px 72px rgb(0 8 17 / 36%);
+}
+
+.form {
+  width: min(100%, 456px);
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(36px, 2.75vw, 44px);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #101f30;
+  letter-spacing: -0.035em;
+}
+
+.sub-title {
+  margin: 14px 0 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: #727880;
+}
+
+.login-form {
+  margin-top: 36px;
+}
+
+.form-field + .form-field {
+  margin-top: 24px;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #25313e;
+}
+
+.login-form-item {
+  margin-bottom: 0;
+}
+
+.custom-height {
+  height: 51px !important;
+}
+
+.el-input__wrapper {
+  padding: 0 16px;
+  background: #fffefa;
+  border: 1px solid #cfd4d8;
+  border-radius: 8px;
+  box-shadow: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.el-input__wrapper:hover {
+  border-color: #9caaa9;
+}
+
+.is-focus .el-input__wrapper {
+  border-color: #4e8884;
+  box-shadow: 0 0 0 3px rgb(78 136 132 / 13%);
+}
+
+.el-input__prefix .art-svg-icon {
+  margin-right: 11px;
+  font-size: 20px;
+  color: #929aa2;
+}
+
+.captcha-row {
+  display: flex;
+  width: 100%;
+  gap: 14px;
+}
+
+.captcha-row .el-input {
+  min-width: 0;
+  flex: 1;
+}
+
+.captcha-button {
+  width: 170px;
+  height: 51px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: #f5f5f1;
+  border: 1px solid #d9dddf;
+  border-radius: 8px;
+}
+
+.captcha-button:focus-visible {
+  outline: 3px solid rgb(78 136 132 / 30%);
+  outline-offset: 2px;
+}
+
+.captcha-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.login-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 26px;
+  font-size: 14px;
+}
+
+.el-checkbox__label {
+  color: #59636d;
+}
+
+.forgot-password {
+  color: #348a86;
+}
+
+.login-submit-wrap {
+  margin-top: 32px;
+}
+
+.el-button--primary {
+  height: 56px !important;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: linear-gradient(110deg, #071827 0%, #102a3c 100%);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: 0 12px 22px rgb(5 23 38 / 24%);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.el-button--primary:hover {
+  background: linear-gradient(110deg, #0c2335 0%, #1a4054 100%);
+  box-shadow: 0 16px 28px rgb(5 23 38 / 30%);
+  transform: translateY(-1px);
+}
+
+.login-security-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 24px 0 0;
+  font-size: 14px;
+  color: #8b9197;
+}
+
+.login-security-note .art-svg-icon {
+  color: #7f8a92;
+}
+
+@media only screen and (width <= 1180px) {
+  .login-page {
+    background:
+      radial-gradient(circle at 12% 5%, rgb(47 139 133 / 24%), transparent 24rem),
+      #07141f;
+  }
+
+  .auth-right-wrap {
+    position: relative;
+    top: auto;
+    left: auto;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 100svh;
+    padding: 72px 24px 32px;
+  }
+
+  .login-card {
+    width: min(100%, 626px);
+    min-height: auto;
+    margin: auto;
+  }
+}
+
+@media only screen and (width <= 640px) {
+  .auth-right-wrap {
+    padding: 48px 20px 24px;
+  }
+
+  .login-card {
+    padding: 38px 26px 32px;
+    border-radius: 14px;
+  }
+
+  .sub-title {
+    font-size: 15px;
+  }
+
+  .login-form {
+    margin-top: 30px;
+  }
+
+  .form-field + .form-field {
+    margin-top: 20px;
+  }
+
+  .captcha-button {
+    width: 132px;
+  }
+
+  .login-security-note {
+    font-size: 12px;
+  }
+}

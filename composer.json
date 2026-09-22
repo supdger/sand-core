@@ -1,0 +1,49 @@
+{
+  "name": "supdger/sand-core",
+  "description": "SandAdmin core backend and matching sandadmin-artd source for Webman.",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.2",
+    "godruoyi/php-snowflake": "^3.0.0",
+    "illuminate/events": "^12.43",
+    "illuminate/pagination": "^12.43",
+    "openspout/openspout": "^4.0",
+    "phpmailer/phpmailer": "^6.9 || ^7.0",
+    "ramsey/uuid": "^4.0",
+    "tinywan/jwt": "^1.11",
+    "tinywan/storage": "^1.1",
+    "topthink/think-orm": "^2.0.53 || ^3.0.0",
+    "topthink/think-validate": "^3.0",
+    "webman/cache": "^2.1",
+    "webman/captcha": "^1.0",
+    "webman/channel": "^2.1",
+    "webman/console": "^2.1",
+    "webman/database": "^2.1",
+    "webman/event": "^1.0",
+    "webman/redis": "^2.1",
+    "webman/think-cache": "^2.1",
+    "webman/think-orm": "^2.1",
+    "workerman/crontab": "^1.0",
+    "workerman/webman-framework": "^2.1",
+    "zoujingli/ip2region": "^2.0",
+    "aliyuncs/oss-sdk-php": "^2.7",
+    "smalot/pdfparser": "^2.12"
+  },
+  "autoload": {
+    "psr-4": {
+      "SandAdmin\\Core\\": "server/",
+      "plugin\\sandadmin\\": "server/plugin/sandadmin/"
+    }
+  },
+  "archive": {
+    "exclude": [
+      "/sandadmin-artd/node_modules",
+      "/sandadmin-artd/dist",
+      "/sandadmin-artd/.env*",
+      "/**/.DS_Store",
+      "/**/.idea",
+      "/**/.vscode"
+    ]
+  }
+}
