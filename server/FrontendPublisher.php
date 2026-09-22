@@ -29,16 +29,17 @@ final class FrontendPublisher
             throw new RuntimeException("无法创建 sandadmin-artd 目录：{$target}");
         }
 
+        $files = self::sourceManifest($source);
         $installed = self::readManifest($target);
         $entries = array_values(array_diff(scandir($target) ?: [], ['.', '..']));
         if ($installed === null && $entries !== []) {
             throw new RuntimeException('sandadmin-artd 目录非空且没有 Sand Core 发布清单，拒绝覆盖');
         }
         if ($installed !== null) {
-            self::assertUnmodified($target, $installed['files']);
+            self::assertUnmodified($target, array_intersect_key($installed['files'], $files));
+            self::assertNoUnmanagedCollision($target, array_diff_key($files, $installed['files']));
         }
 
-        $files = self::sourceManifest($source);
         self::copyTree($source, $target);
         self::writeManifest($target, $files);
     }
@@ -93,6 +94,16 @@ final class FrontendPublisher
             $path = $target . '/' . $relative;
             if (!is_file($path) || !hash_equals($hash, hash_file('sha256', $path))) {
                 throw new RuntimeException("拒绝覆盖已修改的 Sand Core 前端源码：{$relative}");
+            }
+        }
+    }
+
+    /** @param array<string,string> $files */
+    private static function assertNoUnmanagedCollision(string $target, array $files): void
+    {
+        foreach (array_keys($files) as $relative) {
+            if (file_exists($target . '/' . $relative) || is_link($target . '/' . $relative)) {
+                throw new RuntimeException("目标已有未受管理的 Sand Core 前端文件：{$relative}");
             }
         }
     }
