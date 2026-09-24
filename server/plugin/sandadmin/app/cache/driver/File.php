@@ -20,7 +20,7 @@ class File extends ThinkFile
             return $operation();
         }
 
-        $path = rtrim($this->options['path'], DIRECTORY_SEPARATOR);
+        $path = rtrim($this->options['path'], '/\\');
         $parent = dirname($path);
         if (!is_dir($parent) && !@mkdir($parent, 0755, true) && !is_dir($parent)) {
             throw new RuntimeException('Unable to create file-cache lock directory');
