@@ -864,7 +864,7 @@
                                 <p class="credential-notice" id="initialAdminNotice">请在首次登录后立即修改默认密码。</p>
                             </div>
                             <div class="action-buttons">
-                                <a href="http://localhost:3006" class="btn btn-primary">
+                                <a href="#" id="adminEntry" class="btn btn-primary">
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>进入管理后台</span>
                                 </a>
@@ -879,6 +879,8 @@
     <!-- jQuery -->
     <script src="/app/sandadmin/assets/jquery.min.js"></script>
     <script>
+        document.getElementById('adminEntry').href =
+            `${window.location.protocol}//${window.location.hostname}:{{frontendPort}}/#/auth/login`;
 
         // 显示通知
         function showNotification(type, message) {

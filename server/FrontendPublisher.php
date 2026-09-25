@@ -42,6 +42,20 @@ final class FrontendPublisher
 
         self::copyTree($source, $target);
         self::writeManifest($target, $files);
+        self::initializeEnvironment($source, $target);
+    }
+
+    private static function initializeEnvironment(string $source, string $target): void
+    {
+        foreach (['.env', '.env.development'] as $name) {
+            $destination = $target . '/' . $name;
+            if (file_exists($destination) || is_link($destination)) {
+                continue;
+            }
+            if (!copy($source . '/' . $name . '.example', $destination)) {
+                throw new RuntimeException("无法初始化前端环境文件：{$destination}");
+            }
+        }
     }
 
     /** @return array<string, string> */

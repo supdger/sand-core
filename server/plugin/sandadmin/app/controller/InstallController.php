@@ -51,6 +51,22 @@ class InstallController extends OpenController
             return view('install/error', $data);
         }
 
+        $frontendRoot = dirname(base_path()) . DIRECTORY_SEPARATOR . 'sandadmin-artd';
+        $data['frontendPort'] = 3006;
+        foreach (['.env', '.env.local', '.env.development', '.env.development.local'] as $name) {
+            $frontendEnv = $frontendRoot . DIRECTORY_SEPARATOR . $name;
+            if (is_file($frontendEnv)) {
+                foreach (file($frontendEnv, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                    if (preg_match("/^\s*VITE_PORT\s*=\s*(?:\"(\d+)\"|'(\d+)'|(\d+))\s*(?:#.*)?$/", $line, $match)) {
+                        $port = (int) (($match[1] ?? '') ?: (($match[2] ?? '') ?: ($match[3] ?? '')));
+                        if ($port >= 1 && $port <= 65535) {
+                            $data['frontendPort'] = $port;
+                        }
+                    }
+                }
+            }
+        }
+
         return view('install/index', $data);
     }
 
