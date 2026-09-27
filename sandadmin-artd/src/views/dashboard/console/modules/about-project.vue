@@ -28,7 +28,7 @@
 
   const linkList = [
     { label: '项目主页', url: 'https://github.com/supdger/sandadmin' },
-    { label: '项目文档', url: 'https://github.com/supdger/sandadmin/tree/main/docs' },
+    { label: '项目文档', url: 'https://github.com/supdger/sandadmin/wiki' },
     { label: '问题反馈', url: 'https://github.com/supdger/sandadmin/issues' },
     { label: '上游 SaiAdmin', url: 'https://github.com/saithink/saiadmin6.x' }
   ]
