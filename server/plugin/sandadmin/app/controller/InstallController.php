@@ -99,20 +99,14 @@ class InstallController extends OpenController
         try {
             $db = $this->getPdo($driver, $host, $user, $password, $port, $database);
         } catch (\Throwable $e) {
-            $message = $e->getMessage();
-            if (stripos($message, 'Access denied for user') || stripos($message, 'password authentication failed')) {
-                return $this->fail('数据库用户名或密码错误');
-            }
-            if (stripos($message, 'Connection refused')) {
-                return $this->fail('Connection refused. 请确认数据库IP端口是否正确，数据库已经启动');
-            }
-            if (stripos($message, 'timed out')) {
-                return $this->fail('数据库连接超时，请确认数据库IP端口是否正确，安全组及防火墙已经放行端口');
-            }
-            throw $e;
+            return $this->fail($this->databaseErrorMessage($e));
         }
 
-        $table = $db->query("SELECT to_regclass('public.sand_system_menu')")->fetchColumn();
+        try {
+            $table = $db->query("SELECT to_regclass('public.sand_system_menu')")->fetchColumn();
+        } catch (\PDOException $e) {
+            return $this->fail($this->databaseErrorMessage($e));
+        }
         $installed = $table !== false && $table !== null;
         if ($installed) {
             return $this->fail('数据库已经安装，请勿重复安装');
@@ -140,6 +134,9 @@ class InstallController extends OpenController
         } catch (\Throwable $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
+            }
+            if ($e instanceof \PDOException) {
+                return $this->fail($this->databaseErrorMessage($e));
             }
             throw $e;
         }
@@ -398,6 +395,64 @@ return [
 EOF;
         file_put_contents(base_path() . '/config/database.php', $database);
 
+    }
+
+    /**
+     * 连接阶段的 libpq 错误可能只有通用 SQLSTATE，补充识别其明确原因。
+     * 仅返回固定提示，避免向安装页面暴露连接信息或密码。
+     */
+    protected function databaseErrorMessage(Throwable $error): string
+    {
+        $state = $error instanceof \PDOException
+            ? (string) ($error->errorInfo[0] ?? $error->getCode())
+            : '';
+        $message = $error->getMessage();
+        // Windows libpq 的本地化诊断可能采用 CP936/GBK，转换仅用于分类。
+        if (preg_match('//u', $message) !== 1) {
+            $message = function_exists('iconv') ? (@iconv('GB18030', 'UTF-8', $message) ?: '') : '';
+        }
+        $message = strtolower($message);
+
+        if ($state === '3D000') {
+            return '数据库不存在，请检查数据库名，并先创建 PostgreSQL 数据库后再安装';
+        }
+        if ($state === '42501') {
+            return '数据库用户权限不足，请确认该用户具有目标数据库的连接权限，以及 public 模式中创建表、写入数据和创建函数的权限';
+        }
+        if ($state === '28P01') {
+            return '数据库身份认证失败，请检查用户名和密码';
+        }
+        if (str_contains($message, 'no pg_hba.conf entry')) {
+            return '数据库拒绝此连接，请检查 pg_hba.conf 是否允许当前主机、用户和数据库，以及 SSL 配置是否匹配';
+        }
+        if (preg_match('/(?:database|数据库)\s*["“][^"”]*["”]\s*(?:does not exist|不存在)/u', $message)) {
+            return '数据库不存在，请检查数据库名，并先创建 PostgreSQL 数据库后再安装';
+        }
+        if (preg_match('/(?:role|角色)\s*["“][^"”]*["”]\s*(?:does not exist|不存在)/u', $message)) {
+            return '数据库用户不存在，请检查用户名';
+        }
+        if (preg_match('/(?:password|密码)\s*(?:authentication|认证|验证)\s*(?:failed|失败)/u', $message) || str_contains($message, 'no password supplied')) {
+            return '数据库身份认证失败，请检查用户名和密码';
+        }
+        if (str_contains($message, 'permission denied')) {
+            return '数据库用户权限不足，请确认该用户具有目标数据库的连接权限，以及 public 模式中创建表、写入数据和创建函数的权限';
+        }
+        if ($state === '28000') {
+            return '数据库拒绝身份认证，请检查用户登录权限和 PostgreSQL 认证配置';
+        }
+        if (str_contains($message, 'could not find driver')) {
+            return 'PHP 未安装或启用 PostgreSQL PDO 驱动，请启用 pdo_pgsql 扩展后重启 PHP 服务';
+        }
+        if (str_contains($message, 'could not translate host name') || str_contains($message, 'name or service not known') || str_contains($message, 'no such host is known')) {
+            return '数据库主机名无法解析，请检查主机地址和 DNS 配置';
+        }
+        if (str_contains($message, 'connection refused') || str_contains($message, 'actively refused')) {
+            return '数据库连接被拒绝，请检查主机和端口，并确认 PostgreSQL 已启动且允许远程连接';
+        }
+        if (str_contains($message, 'timed out') || str_contains($message, 'timeout expired')) {
+            return '数据库连接超时，请检查主机、端口、网络以及防火墙是否放行';
+        }
+        return '数据库操作失败，请检查数据库配置及 PostgreSQL 服务日志';
     }
 
     /**

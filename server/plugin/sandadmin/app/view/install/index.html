@@ -1044,6 +1044,7 @@
             $.ajax({
                 url: '/core/install/install',
                 method: 'POST',
+                dataType: 'json',
                 data: dbConfig,
                 success: function(response) {
                     if (response.code == 200) {
@@ -1065,11 +1066,17 @@
 
                         runStep()
                     } else {
-                        showNotification('error', '数据库连接失败：' + response.message);
+                        showNotification('error', response.message || '安装失败，请检查数据库配置');
                     }
                 },
-                error: function() {
-                    showNotification('error', '请求失败，请检查网络连接');
+                error: function(xhr, textStatus) {
+                    if (textStatus === 'parsererror') {
+                        showNotification('error', '服务器返回的安装结果格式异常，请检查服务器日志');
+                    } else if (xhr.status === 0) {
+                        showNotification('error', '无法连接安装服务，请检查网络连接或服务是否启动');
+                    } else {
+                        showNotification('error', '安装请求失败（HTTP ' + xhr.status + '），请检查服务器日志');
+                    }
                 }
             });
            
