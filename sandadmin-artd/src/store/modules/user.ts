@@ -96,6 +96,7 @@ export const useUserStore = defineStore(
      * @param status 登录状态
      */
     const setLoginStatus = (status: boolean) => {
+      if (status) resetRouterState(0)
       isLogin.value = status
     }
 
