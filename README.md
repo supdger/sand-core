@@ -14,7 +14,7 @@ SandAdmin 的 Composer 核心包，包含：
 安装后端：
 
 ```bash
-composer require supdger/sand-core:^0.1
+composer require supdger/sand-core:^0.2
 ```
 
 Composer 安装或更新时，Webman 插件安装钩子会将匹配版本的前端源码自动发布到
@@ -23,3 +23,5 @@ Composer 安装或更新时，Webman 插件安装钩子会将匹配版本的前�
 发布成功后，宿主应有 `server/plugin/sandadmin/`，前端目录应有 `.sand-core-source-manifest.json`。这只确认源码发布，不代表数据库初始化或登录通过。
 
 运行管理端还需要 Node.js 和 pnpm：前端声明下限为 Node.js 20.19.0、pnpm 8.8.0；当前 v9 锁文件应使用 pnpm 9，推荐按上述指南使用 Node.js 22（≥22.12.0）和 pnpm 9.15.9。环境文件、依赖安装、服务启动及首次登录步骤沿用该指南，以前端启动地址、登录后菜单和用户信息正常加载作为运行结果。
+
+后台核心更新由配套的 [SandPackage 0.2.0](https://github.com/supdger/sand-package) 提供，初次启用按其配置示例准备执行环境。0.2.0 不变更数据库结构或宿主骨架；更新契约与发行提交绑定，实际支持范围见对应版本说明。
