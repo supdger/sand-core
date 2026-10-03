@@ -5,6 +5,14 @@ SandAdmin 的 Composer 核心包，包含：
 - `server/plugin/sandadmin/`：Webman 后台核心后端源码；
 - `sandadmin-artd/`：与后端同版本的管理端前端源码。
 
+## 源码与安装
+
+本仓提供 SandAdmin 核心后端及匹配的管理端源码。已有宿主通过 Composer 安装本包；[开发源码](https://github.com/supdger/sand-core/tree/main)与 GitHub 的 Source code 压缩包供开发使用，不是 SandPackage 业务插件安装包。
+
+## 版本更新
+
+[版本更新与升级影响（Wiki）](https://github.com/supdger/sandadmin/wiki/plugin-updates)按组件说明功能变化、修复和升级注意事项；[完整更新日志](CHANGELOG.md)保留历史记录。下载见 [最新稳定版](https://github.com/supdger/sand-core/releases/latest)；预发布及全部版本见 [公开发行](https://github.com/supdger/sand-core/releases)。
+
 ## 安装前提
 
 面向已有 SandAdmin 宿主；尚未准备宿主时，先按[本地运行与首次安装](https://github.com/supdger/sandadmin/wiki/getting-started)获取源码和准备 PostgreSQL。
