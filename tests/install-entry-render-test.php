@@ -34,6 +34,22 @@ try {
     $freshHtml = $twig->render('install/index.html', $fresh['data']);
     check(str_contains($freshHtml, 'id="dbHost"'), 'fresh database form renders');
     check(str_contains($freshHtml, '22.12.0') && str_contains($freshHtml, 'pnpm 11.19.0') && !str_contains($freshHtml, 'pnpm 9'), 'recovery help renders the verified Node and pnpm prerequisites');
+    foreach (['/admin/', 'https://admin.example/panel/', 'http://[::1]:3010/admin/'] as $url) {
+        $configuration['plugin.sandadmin.app.frontend_url'] = $url;
+        $entry = $controller->index()['data'];
+        check($entry['frontendUrl'] === $url && $entry['frontendError'] === '', 'valid configured entry is preserved: ' . $url);
+    }
+    foreach ([
+        'https://operator:private-entry-secret@example.com/',
+        'javascript:private-entry-secret',
+        '/\\private-entry-secret',
+        "https://example.com/\nprivate-entry-secret",
+    ] as $url) {
+        $configuration['plugin.sandadmin.app.frontend_url'] = $url;
+        $entry = $controller->index()['data'];
+        $rejectedHtml = $twig->render('install/index.html', $entry);
+        check($entry['frontendUrl'] === '' && $entry['frontendError'] !== '' && !str_contains($rejectedHtml, 'private-entry-secret'), 'invalid configured entry is rejected before rendering without its secret');
+    }
 
     file_put_contents($root . '/server/.env', 'installed-test');
     $configuration['plugin.sandadmin.app.frontend_url'] = 'https://admin.example/panel/?x="><script>alert(1)</script>';

@@ -69,6 +69,9 @@
         let generation = 0;
 
         function selectedUrl() {
+            if (root.dataset.frontendError && !input.value.trim()) {
+                throw new Error(root.dataset.frontendError);
+            }
             return loginUrl(input.value, global.location.href, root.dataset.frontendPort, root.dataset.frontendBase);
         }
 

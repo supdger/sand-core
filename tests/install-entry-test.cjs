@@ -131,6 +131,25 @@ test('completion stays put on failure, ignores obsolete replies, and rechecks be
         FakeImage.instances.at(-1).load(113, 29);
         await clicked;
         assert.deepEqual(navigations, ['http://localhost:3010/#/auth/login']);
+
+        // A server-rejected URL is not replaced with a guessed default.
+        elements.clear();
+        const beforeImages = FakeImage.instances.length;
+        const rejected = init({
+            dataset: { frontendPort: '3006', frontendBase: '/', frontendUrl: '', frontendError: '配置无效，请填写合法地址。' },
+            querySelector: element
+        });
+        await rejected.check(false);
+        assert.equal(FakeImage.instances.length, beforeImages);
+        assert.equal(element('#frontendAddress').value, '');
+        assert.equal(element('#frontendManual').href, undefined);
+        assert.equal(element('#adminEntry').disabled, true);
+        element('#frontendAddress').value = '/admin/';
+        element('#frontendAddress').listeners.input();
+        const recovered = rejected.check(false);
+        FakeImage.instances.at(-1).load(113, 29);
+        await recovered;
+        assert.equal(element('#adminEntry').disabled, false);
     } finally {
         cleanup?.();
         for (const [name, value] of Object.entries(saved)) {

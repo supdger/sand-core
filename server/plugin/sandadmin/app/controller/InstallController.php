@@ -58,11 +58,22 @@ class InstallController extends OpenController
     protected function frontendEntrySettings(): array
     {
         $frontendRoot = \SandAdmin\Core\Install::frontendTarget();
+        $configuredUrl = (string) config('plugin.sandadmin.app.frontend_url', '');
         $data = [
             'frontendPort' => 3006,
             'frontendBase' => '/',
-            'frontendUrl' => trim((string) config('plugin.sandadmin.app.frontend_url', '')),
+            'frontendUrl' => '',
+            'frontendConfigured' => $configuredUrl !== '',
+            'frontendError' => '',
         ];
+        if ($configuredUrl !== '') {
+            if ($this->validFrontendUrl($configuredUrl)) {
+                $data['frontendUrl'] = $configuredUrl;
+            } else {
+                // Never render the rejected value: it may contain a password.
+                $data['frontendError'] = 'SANDADMIN_FRONTEND_URL 配置无效。请填写不含用户名、密码或控制字符的 HTTP(S) 地址或同源路径。';
+            }
+        }
         foreach (['.env', '.env.local', '.env.development', '.env.development.local'] as $name) {
             $frontendEnv = $frontendRoot . DIRECTORY_SEPARATOR . $name;
             if (is_file($frontendEnv)) {
@@ -84,6 +95,23 @@ class InstallController extends OpenController
         }
 
         return $data;
+    }
+
+    protected function validFrontendUrl(string $url): bool
+    {
+        if (preg_match('/[\x00-\x20\\\\]/', $url)) {
+            return false;
+        }
+        $parts = parse_url($url);
+        if ($parts === false || array_key_exists('user', $parts) || array_key_exists('pass', $parts)) {
+            return false;
+        }
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            return !isset($parts['scheme']) && !isset($parts['host']);
+        }
+        return in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
+            && ($parts['host'] ?? '') !== ''
+            && (!isset($parts['port']) || $parts['port'] >= 1);
     }
 
     /**
