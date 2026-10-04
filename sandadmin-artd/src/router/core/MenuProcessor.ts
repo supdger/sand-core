@@ -18,14 +18,16 @@ export class MenuProcessor {
   /**
    * 获取菜单数据
    */
-  async getMenuList(): Promise<AppRouteRecord[]> {
+  async getMenuList(
+    readMenu: () => Promise<AppRouteRecord[]> = fetchGetMenuList
+  ): Promise<AppRouteRecord[]> {
     const { isFrontendMode } = useAppMode()
 
     let menuList: AppRouteRecord[]
     if (isFrontendMode.value) {
       menuList = await this.processFrontendMenu()
     } else {
-      menuList = await this.processBackendMenu()
+      menuList = await this.processBackendMenu(readMenu)
     }
 
     // 规范化路径（将相对路径转换为完整路径）
@@ -52,8 +54,10 @@ export class MenuProcessor {
   /**
    * 处理后端控制模式的菜单
    */
-  private async processBackendMenu(): Promise<AppRouteRecord[]> {
-    const list = await fetchGetMenuList()
+  private async processBackendMenu(
+    readMenu: () => Promise<AppRouteRecord[]>
+  ): Promise<AppRouteRecord[]> {
+    const list = await readMenu()
     return this.filterEmptyMenus(list)
   }
 

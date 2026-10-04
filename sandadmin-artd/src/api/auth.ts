@@ -1,6 +1,11 @@
 import request from '@/utils/http'
 import { AppRouteRecord } from '@/types/router'
 
+export interface InitializationRequestOptions {
+  timeout?: number
+  showErrorMessage?: boolean
+}
+
 /**
  * 获取验证码
  * @returns 响应
@@ -27,8 +32,9 @@ export function fetchLogin(params: Api.Auth.LoginParams) {
  * 获取用户信息
  * @returns 用户信息
  */
-export function fetchGetUserInfo() {
+export function fetchGetUserInfo(options: InitializationRequestOptions = {}) {
   return request.get<Api.Auth.UserInfo>({
+    ...options,
     url: '/core/system/user'
   })
 }
@@ -93,8 +99,9 @@ export function fetchClearCache() {
  * 获取字典数据
  * @returns 字典数组
  */
-export function fetchGetDictList() {
+export function fetchGetDictList(options: InitializationRequestOptions = {}) {
   return request.get<Api.Auth.DictData>({
+    ...options,
     url: '/core/system/dictAll'
   })
 }
@@ -103,8 +110,9 @@ export function fetchGetDictList() {
  * 获取菜单列表
  * @returns 菜单数组
  */
-export function fetchGetMenuList() {
+export function fetchGetMenuList(options: InitializationRequestOptions = {}) {
   return request.get<AppRouteRecord[]>({
+    ...options,
     url: '/core/system/menu'
   })
 }

@@ -13,9 +13,15 @@ import { staticRoutes } from '../routes/staticRoutes'
 import { loadingService } from '@/utils/ui/loading'
 import { useCommon } from '@/hooks/core/useCommon'
 import { useWorktabStore } from '@/store/modules/worktab'
-import { fetchGetUserInfo, fetchGetDictList } from '@/api/auth'
+import { fetchGetUserInfo, fetchGetDictList, fetchGetMenuList } from '@/api/auth'
+import type { InitializationRequestOptions } from '@/api/auth'
 import { ApiStatus } from '@/utils/http/status'
-import { isHttpError } from '@/utils/http/error'
+import {
+  HttpError,
+  isHttpError,
+  isRecoverableInitializationError,
+  showError
+} from '@/utils/http/error'
 import { RouteRegistry, MenuProcessor, IframeRouteManager } from '../core'
 
 let routeRegistry: RouteRegistry | null = null
@@ -100,6 +106,7 @@ export async function ensureDynamicRoutesReady(
         if (!isUnauthorizedError(error)) {
           routeInitFailed = true
           routeInitErrorPage = initializationErrorPage(error)
+          if (isHttpError(error)) showError(error)
         }
         throw error
       })
@@ -339,12 +346,54 @@ async function initializeDynamicRoutes(
   router: Router,
   generation: number
 ): Promise<AppRouteRecord[]> {
-  // 并行获取用户信息、字典数据和菜单列表，减少串行等待的网络延迟
+  // A shared deadline preserves the normal GET timeout, including retry waits.
+  const deadline = Date.now() + 15000
+  let stopped = false
+  const assertCurrent = () => {
+    if (stopped || generation !== routeGeneration || !useUserStore().isLogin) {
+      throw new RouteInitializationCancelled()
+    }
+  }
+  const timeoutError = () =>
+    new HttpError('初始化请求超时，请稍后重试', ApiStatus.requestTimeout, {
+      transport: 'timeout'
+    })
+  const read = async <T>(
+    fetch: (options: InitializationRequestOptions) => Promise<T>
+  ): Promise<T> => {
+    for (let attempt = 0; ; attempt += 1) {
+      assertCurrent()
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) {
+        throw timeoutError()
+      }
+      try {
+        const result = await fetch({ timeout: remaining, showErrorMessage: false })
+        assertCurrent()
+        if (Date.now() >= deadline) throw timeoutError()
+        return result
+      } catch (error) {
+        assertCurrent()
+        if (
+          !isRecoverableInitializationError(error) ||
+          attempt >= 5 ||
+          deadline - Date.now() <= 1000
+        ) {
+          throw error
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+  }
+  // Retry only the reads; menu processing and state mutation never run in a retry.
   const [userInfo, dictList, menuList] = await Promise.all([
-    fetchGetUserInfo(),
-    fetchGetDictList(),
-    menuProcessor.getMenuList()
-  ])
+    read(fetchGetUserInfo),
+    read(fetchGetDictList),
+    menuProcessor.getMenuList(() => read(fetchGetMenuList))
+  ]).catch((error: unknown) => {
+    stopped = true
+    throw error
+  })
   if (generation !== routeGeneration || !useUserStore().isLogin) {
     throw new RouteInitializationCancelled()
   }

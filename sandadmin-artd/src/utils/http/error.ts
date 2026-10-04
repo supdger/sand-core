@@ -55,6 +55,7 @@ export interface ErrorLogData {
 
 // 自定义 HttpError 类
 export class HttpError extends Error {
+  public readonly transport?: 'network' | 'http' | 'timeout' | 'cancelled' | 'unknown'
   public readonly code: number
   public readonly data?: unknown
   public readonly timestamp: string
@@ -68,6 +69,7 @@ export class HttpError extends Error {
       data?: unknown
       url?: string
       method?: string
+      transport?: HttpError['transport']
     }
   ) {
     super(message)
@@ -77,6 +79,7 @@ export class HttpError extends Error {
     this.timestamp = new Date().toISOString()
     this.url = options?.url
     this.method = options?.method
+    this.transport = options?.transport
   }
 
   public toLogData(): ErrorLogData {
@@ -122,7 +125,9 @@ export function handleError(error: AxiosError<ErrorResponse>): never {
   // 处理取消的请求
   if (error.code === 'ERR_CANCELED') {
     console.warn('Request cancelled:', error.message)
-    throw new HttpError($t('httpMsg.requestCancelled'), ApiStatus.error)
+    throw new HttpError($t('httpMsg.requestCancelled'), ApiStatus.error, {
+      transport: 'cancelled'
+    })
   }
 
   const statusCode = error.response?.status
@@ -132,6 +137,12 @@ export function handleError(error: AxiosError<ErrorResponse>): never {
   // 处理网络错误
   if (!error.response) {
     throw new HttpError($t('httpMsg.networkError'), ApiStatus.error, {
+      transport:
+        error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+          ? 'timeout'
+          : ['ERR_NETWORK', 'ECONNRESET', 'ECONNREFUSED'].includes(error.code || '')
+            ? 'network'
+            : 'unknown',
       url: requestConfig?.url,
       method: requestConfig?.method?.toUpperCase()
     })
@@ -142,6 +153,7 @@ export function handleError(error: AxiosError<ErrorResponse>): never {
     ? getErrorMessage(statusCode)
     : errorMessage || $t('httpMsg.requestFailed')
   throw new HttpError(message, statusCode || ApiStatus.error, {
+    transport: 'http',
     data: error.response.data,
     url: requestConfig?.url,
     method: requestConfig?.method?.toUpperCase()
@@ -179,4 +191,15 @@ export function showSuccess(message: string, showMessage: boolean = true): void 
  */
 export const isHttpError = (error: unknown): error is HttpError => {
   return error instanceof HttpError
+}
+
+/** Only the route bootstrap opts into retrying these transport failures. */
+export function isRecoverableInitializationError(error: unknown): boolean {
+  if (!isHttpError(error) || error.method !== 'GET') return false
+  if (error.transport === 'network') return true
+  return (
+    error.transport === 'http' &&
+    [500, 502, 503].includes(error.code) &&
+    (error.data === '' || error.data === null || error.data === undefined)
+  )
 }
