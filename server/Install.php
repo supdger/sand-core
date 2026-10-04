@@ -49,7 +49,7 @@ final class Install
         }
     }
 
-    private static function frontendTarget(): string
+    public static function frontendTarget(): string
     {
         $basePath = rtrim(str_replace('\\', '/', base_path()), '/');
 

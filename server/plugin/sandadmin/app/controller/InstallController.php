@@ -41,18 +41,28 @@ class InstallController extends OpenController
         $env = base_path() . DIRECTORY_SEPARATOR . '.env';
 
         clearstatcache();
-        if (is_file($env)) {
-            $data['error'] = '程序已经安装';
-            return view('install/error', $data);
-        }
+        $data['installed'] = is_file($env);
 
-        if (!is_writable(base_path() . DIRECTORY_SEPARATOR . 'config')) {
+        if (!$data['installed'] && !is_writable(base_path() . DIRECTORY_SEPARATOR . 'config')) {
             $data['error'] = '权限认证失败';
             return view('install/error', $data);
         }
 
-        $frontendRoot = dirname(base_path()) . DIRECTORY_SEPARATOR . 'sandadmin-artd';
-        $data['frontendPort'] = 3006;
+        return view('install/index', array_merge($data, $this->frontendEntrySettings()));
+    }
+
+    /**
+     * Read the same development env precedence as Vite. Public deployments may
+     * select their own browser-facing URL; no server-side connection is made.
+     */
+    protected function frontendEntrySettings(): array
+    {
+        $frontendRoot = \SandAdmin\Core\Install::frontendTarget();
+        $data = [
+            'frontendPort' => 3006,
+            'frontendBase' => '/',
+            'frontendUrl' => trim((string) config('plugin.sandadmin.app.frontend_url', '')),
+        ];
         foreach (['.env', '.env.local', '.env.development', '.env.development.local'] as $name) {
             $frontendEnv = $frontendRoot . DIRECTORY_SEPARATOR . $name;
             if (is_file($frontendEnv)) {
@@ -63,11 +73,17 @@ class InstallController extends OpenController
                             $data['frontendPort'] = $port;
                         }
                     }
+                    if (preg_match('/^\s*VITE_BASE_URL\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s#]+))\s*(?:#.*)?$/', $line, $match)) {
+                        $base = ($match[1] ?? '') ?: (($match[2] ?? '') ?: ($match[3] ?? ''));
+                        if (str_starts_with($base, '/') && !str_starts_with($base, '//')) {
+                            $data['frontendBase'] = $base;
+                        }
+                    }
                 }
             }
         }
 
-        return view('install/index', $data);
+        return $data;
     }
 
     /**
