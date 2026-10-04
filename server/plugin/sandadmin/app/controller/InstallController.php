@@ -41,18 +41,39 @@ class InstallController extends OpenController
         $env = base_path() . DIRECTORY_SEPARATOR . '.env';
 
         clearstatcache();
-        if (is_file($env)) {
-            $data['error'] = '程序已经安装';
-            return view('install/error', $data);
-        }
+        $data['installed'] = is_file($env);
 
-        if (!is_writable(base_path() . DIRECTORY_SEPARATOR . 'config')) {
+        if (!$data['installed'] && !is_writable(base_path() . DIRECTORY_SEPARATOR . 'config')) {
             $data['error'] = '权限认证失败';
             return view('install/error', $data);
         }
 
-        $frontendRoot = dirname(base_path()) . DIRECTORY_SEPARATOR . 'sandadmin-artd';
-        $data['frontendPort'] = 3006;
+        return view('install/index', array_merge($data, $this->frontendEntrySettings()));
+    }
+
+    /**
+     * Read the same development env precedence as Vite. Public deployments may
+     * select their own browser-facing URL; no server-side connection is made.
+     */
+    protected function frontendEntrySettings(): array
+    {
+        $frontendRoot = \SandAdmin\Core\Install::frontendTarget();
+        $configuredUrl = (string) config('plugin.sandadmin.app.frontend_url', '');
+        $data = [
+            'frontendPort' => 3006,
+            'frontendBase' => '/',
+            'frontendUrl' => '',
+            'frontendConfigured' => $configuredUrl !== '',
+            'frontendError' => '',
+        ];
+        if ($configuredUrl !== '') {
+            if ($this->validFrontendUrl($configuredUrl)) {
+                $data['frontendUrl'] = $configuredUrl;
+            } else {
+                // Never render the rejected value: it may contain a password.
+                $data['frontendError'] = 'SANDADMIN_FRONTEND_URL 配置无效。请填写不含用户名、密码或控制字符的 HTTP(S) 地址或同源路径。';
+            }
+        }
         foreach (['.env', '.env.local', '.env.development', '.env.development.local'] as $name) {
             $frontendEnv = $frontendRoot . DIRECTORY_SEPARATOR . $name;
             if (is_file($frontendEnv)) {
@@ -63,11 +84,34 @@ class InstallController extends OpenController
                             $data['frontendPort'] = $port;
                         }
                     }
+                    if (preg_match('/^\s*VITE_BASE_URL\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s#]+))\s*(?:#.*)?$/', $line, $match)) {
+                        $base = ($match[1] ?? '') ?: (($match[2] ?? '') ?: ($match[3] ?? ''));
+                        if (str_starts_with($base, '/') && !str_starts_with($base, '//')) {
+                            $data['frontendBase'] = $base;
+                        }
+                    }
                 }
             }
         }
 
-        return view('install/index', $data);
+        return $data;
+    }
+
+    protected function validFrontendUrl(string $url): bool
+    {
+        if (preg_match('/[\x00-\x20\\\\]/', $url)) {
+            return false;
+        }
+        $parts = parse_url($url);
+        if ($parts === false || array_key_exists('user', $parts) || array_key_exists('pass', $parts)) {
+            return false;
+        }
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            return !isset($parts['scheme']) && !isset($parts['host']);
+        }
+        return in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
+            && ($parts['host'] ?? '') !== ''
+            && (!isset($parts['port']) || $parts['port'] >= 1);
     }
 
     /**

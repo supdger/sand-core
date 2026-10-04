@@ -672,6 +672,52 @@
         #step3 .action-buttons {
             width: 100%;
             padding: 0;
+            flex-wrap: wrap;
+        }
+
+        .entry-check {
+            max-width: 680px;
+            margin: 0 auto;
+            text-align: left;
+        }
+
+        .entry-check p {
+            margin: 12px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .entry-check pre {
+            padding: 16px;
+            background: var(--light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            white-space: pre-wrap;
+        }
+
+        .entry-check details {
+            margin-top: 20px;
+        }
+
+        .entry-check summary {
+            cursor: pointer;
+        }
+
+        .entry-check input {
+            width: 100%;
+            margin: 8px 0;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+        }
+
+        .entry-check button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .entry-check [hidden], .initial-admin-credentials[hidden] {
+            display: none;
         }
 
         /* 确保所有步骤内容区域宽度一致 */
@@ -736,7 +782,7 @@
                 <!-- Content Section -->
                 <div class="content-section">
                     <!-- Step 1: Database Config -->
-                    <div class="step-content active" id="step1">
+                    <div class="step-content {{ installed ? '' : 'active' }}" id="step1">
                         <h2 class="step-title">数据库配置</h2>
                         <form id="dbConfigForm">
                             <div class="row g-4">
@@ -856,18 +902,56 @@
                                 <i class="fas fa-check"></i>
                             </div>
                             <h2 class="completed-title">安装成功</h2>
-                            <p class="completed-subtitle">恭喜！已成功安装系统，请重启webman，启动前端项目进行访问。</p>
-                            <div class="initial-admin-credentials" aria-live="polite">
+                            <p class="completed-subtitle">数据库配置已完成。接下来检查管理后台入口，无需重新安装。</p>
+                            {% if not installed %}
+                            <div class="initial-admin-credentials" hidden aria-live="polite">
                                 <h3>首次登录凭据</h3>
-                                <p>用户名：<code id="initialAdminUsername">admin</code></p>
-                                <p>密码：<code id="initialAdminPassword">123456</code></p>
+                                <p>用户名：<code id="initialAdminUsername"></code></p>
+                                <p>密码：<code id="initialAdminPassword"></code></p>
                                 <p class="credential-notice" id="initialAdminNotice">请在首次登录后立即修改默认密码。</p>
                             </div>
-                            <div class="action-buttons">
-                                <a href="#" id="adminEntry" class="btn btn-primary">
-                                    <i class="fas fa-tachometer-alt"></i>
-                                    <span>进入管理后台</span>
-                                </a>
+                            {% endif %}
+                            <div class="entry-check" id="frontendEntry"
+                                 data-frontend-port="{{frontendPort|e('html_attr')}}" data-frontend-base="{{frontendBase|e('html_attr')}}"
+                                 data-frontend-url="{{frontendUrl|e('html_attr')}}" data-frontend-error="{{frontendError|e('html_attr')}}">
+                                <p>后台地址：<code id="frontendTarget"></code></p>
+                                <p id="frontendStatus" role="status" aria-live="polite">等待检查管理端静态资源。</p>
+                                <div class="action-buttons">
+                                    <button type="button" id="adminEntry" class="btn btn-primary" disabled>进入管理后台</button>
+                                    <button type="button" id="frontendRetry" class="btn btn-secondary">重新检查</button>
+                                </div>
+                                <div id="frontendRecovery" hidden>
+                                    {% if frontendConfigured %}
+                                    <h3>恢复已部署的管理端</h3>
+                                    <p>请确认上方地址对应的 Web 服务正在运行，并已发布本版本管理端构建产物。检查站点子路径、HTTPS 和后台 API 反向代理配置后，再点击“重新检查”。</p>
+                                    <p>如果配置地址有误，可先在下方填写正确地址；长期配置请修改服务端环境变量 <code>SANDADMIN_FRONTEND_URL</code>。</p>
+                                    {% else %}
+                                    <h3>启动管理端后继续</h3>
+                                    <p>管理端需要单独运行。请在运行 SandAdmin 的电脑上打开终端，进入包含 <code>sandadmin-artd</code> 文件夹的项目根目录后执行（SandAdmin 克隆项目请勿在 <code>server</code> 目录执行；推荐已验证的 Node.js 22，版本不低于 22.12.0，以及 pnpm 11.19.0）：</p>
+                                    <pre>cd sandadmin-artd
+pnpm install --frozen-lockfile
+pnpm run dev</pre>
+                                    <p>保持终端运行。看到启动地址后，回到这里点击“重新检查”。端口被占用时，先释放该端口，或修改 <code>sandadmin-artd/.env</code> 中的 <code>VITE_PORT</code>，重新启动并在下方填写实际地址。</p>
+                                    <details>
+                                        <summary>Windows：查看并释放被占用的 {{frontendPort}} 端口</summary>
+                                        <p>在 PowerShell 执行前三行查看占用程序；确认可以结束后执行最后一行，并在系统确认提示中核对进程。不要结束仍需使用的其他服务。</p>
+                                        <pre>$listener = Get-NetTCPConnection -State Listen -LocalPort {{frontendPort}}
+$listener | Select-Object LocalAddress, OwningProcess
+Get-Process -Id ($listener.OwningProcess | Sort-Object -Unique)
+Stop-Process -Id ($listener.OwningProcess | Sort-Object -Unique) -Confirm</pre>
+                                    </details>
+                                    <p>如管理端已部署到独立域名或网站子路径，请使用下方实际部署地址，无需启动开发服务。</p>
+                                    {% endif %}
+                                    <p>检查仅读取专属静态图像，不执行管理端或验证登录。旧版构建缺少标记文件、HTTPS 混合内容或站点 <code>img-src</code> 策略也会导致无法确认；请保持现有安全策略，核对部署与访问地址。</p>
+                                    <p><a href="https://github.com/supdger/sandadmin/wiki/getting-started" target="_blank" rel="noopener noreferrer">查看安装与运行指南</a></p>
+                                </div>
+                                <details>
+                                    <summary>使用其他后台地址 / 手工核验</summary>
+                                    <label for="frontendAddress">已部署的后台地址（HTTP(S) 或同源路径，例如 /admin/）</label>
+                                    <input id="frontendAddress" type="text" spellcheck="false" autocomplete="off">
+                                    <p>修改后点击“重新检查”。检查受安全策略限制时，可自行核对地址并在新窗口访问；此操作不代表自动检查通过。</p>
+                                    <a id="frontendManual" target="_blank" rel="noopener noreferrer">尚未确认：在新窗口手工核验地址</a>
+                                </details>
                             </div>
                         </div>
                     </div>
@@ -878,9 +962,9 @@
 
     <!-- jQuery -->
     <script src="/app/sandadmin/assets/jquery.min.js"></script>
+    <script src="/app/sandadmin/assets/install-entry.js"></script>
     <script>
-        document.getElementById('adminEntry').href =
-            `${window.location.protocol}//${window.location.hostname}:{{frontendPort}}/#/auth/login`;
+        const frontendEntry = SandAdminInstallEntry.init(document.getElementById('frontendEntry'));
 
         // 显示通知
         function showNotification(type, message) {
@@ -959,6 +1043,7 @@
                 // 更新进度条
                 const progress = ((currentStep + 1) / 3) * 100;
                 $('.progress-bar').css('width', progress + '%');
+                if (currentStep === 2) frontendEntry.check(false);
             }
             
             
@@ -1051,8 +1136,9 @@
 
                         const initialAdmin = response.data && response.data.initial_admin;
                         if (initialAdmin) {
-                            $('#initialAdminUsername').text(initialAdmin.username || 'admin');
-                            $('#initialAdminPassword').text(initialAdmin.password || '123456');
+                            $('.initial-admin-credentials').prop('hidden', false);
+                            $('#initialAdminUsername').text(initialAdmin.username || '');
+                            $('#initialAdminPassword').text(initialAdmin.password || '');
                             $('#initialAdminNotice').text(initialAdmin.notice || '请在首次登录后立即修改默认密码。');
                         }
 
@@ -1082,6 +1168,9 @@
            
         }
 
+        {% if installed %}
+        nextStep(2);
+        {% endif %}
     </script>
 </body>
 </html>

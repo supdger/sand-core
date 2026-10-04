@@ -2,9 +2,10 @@
   "name": "art-design-pro",
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=20.19.0",
-    "pnpm": ">=8.8.0"
+    "pnpm": ">=11.19.0"
   },
   "scripts": {
     "dev": "vite --open",
