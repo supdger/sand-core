@@ -33,6 +33,7 @@ try {
     $twig = new Twig\Environment(new Twig\Loader\FilesystemLoader(dirname(__DIR__) . '/server/plugin/sandadmin/app/view'));
     $freshHtml = $twig->render('install/index.html', $fresh['data']);
     check(str_contains($freshHtml, 'id="dbHost"'), 'fresh database form renders');
+    check(str_contains($freshHtml, '22.12.0') && str_contains($freshHtml, 'pnpm 11.19.0') && !str_contains($freshHtml, 'pnpm 9'), 'recovery help renders the verified Node and pnpm prerequisites');
 
     file_put_contents($root . '/server/.env', 'installed-test');
     $configuration['plugin.sandadmin.app.frontend_url'] = 'https://admin.example/panel/?x="><script>alert(1)</script>';

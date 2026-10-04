@@ -927,7 +927,7 @@
                                     <p>如果配置地址有误，可先在下方填写正确地址；长期配置请修改服务端环境变量 <code>SANDADMIN_FRONTEND_URL</code>。</p>
                                     {% else %}
                                     <h3>启动管理端后继续</h3>
-                                    <p>管理端需要单独运行。请在运行 SandAdmin 的电脑上打开终端，进入包含 <code>sandadmin-artd</code> 文件夹的项目根目录后执行（SandAdmin 克隆项目请勿在 <code>server</code> 目录执行；需要 Node.js 22 和 pnpm 9）：</p>
+                                    <p>管理端需要单独运行。请在运行 SandAdmin 的电脑上打开终端，进入包含 <code>sandadmin-artd</code> 文件夹的项目根目录后执行（SandAdmin 克隆项目请勿在 <code>server</code> 目录执行；使用 Node.js 22，版本不低于 22.12.0，以及 pnpm 11.19.0）：</p>
                                     <pre>cd sandadmin-artd
 pnpm install --frozen-lockfile
 pnpm run dev</pre>
