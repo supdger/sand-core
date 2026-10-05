@@ -54,13 +54,14 @@ interface LoadingInstance {
 }
 
 let loadingInstance: LoadingInstance | null = null
+let loadingOwner: object | null = null
 
 export const loadingService = {
   /**
    * 显示 loading
    * @returns 关闭 loading 的函数
    */
-  showLoading(): () => void {
+  showLoading(owner: object = {}): () => void {
     if (!loadingInstance) {
       // 每次显示时获取最新的配置，确保背景色与当前主题同步
       const config = {
@@ -69,16 +70,28 @@ export const loadingService = {
       }
       loadingInstance = ElLoading.service(config)
     }
-    return () => this.hideLoading()
+    loadingOwner = owner
+    return () => this.hideLoading(owner)
+  },
+
+  isLoading(): boolean {
+    return loadingInstance !== null
   },
 
   /**
    * 隐藏 loading
    */
-  hideLoading(): void {
+  hideLoading(owner?: object): void {
+    // A cancelled navigation must not close a later navigation's loading.
+    if (owner && owner !== loadingOwner) return
     if (loadingInstance) {
       loadingInstance.close()
       loadingInstance = null
+      loadingOwner = null
     }
   }
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => loadingService.hideLoading())
 }

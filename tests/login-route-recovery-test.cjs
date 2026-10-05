@@ -27,6 +27,10 @@ function fixture() {
   const responses = new Map();
   const messages = [];
   let pause = null;
+  const overlays = [];
+  const disposers = [];
+  const renderCallbacks = [];
+  let deferRender = false;
   const timers = new Map();
   const home = ref("");
   let menu = [{ name: "User", path: "/system/user", meta: {} }];
@@ -94,7 +98,7 @@ function fixture() {
     useSettingStore: () => ({ showNprogress: false }),
     useUserStore: () => user,
     useMenuStore: () => menuStore,
-    useCommon: () => ({ homePath: home }),
+    useCommon: () => ({ homePath: home, scrollToTop() {} }),
     useWorktabStore: () => ({ validateWorktabs() {} }),
     useDictStore: () => ({ setDictList() {} }),
     $t: (key) => key,
@@ -110,12 +114,14 @@ function fixture() {
     MenuProcessor: Processor,
     IframeRouteManager: { getInstance: () => ({ save() {}, clear() {} }) },
     staticRoutes,
-    loadingService: { showLoading() {}, hideLoading() {} },
-    nextTick: (fn) => fn(),
+    fourDotsSpinnerSvg: "",
+    nextTick: (fn) => deferRender ? renderCallbacks.push(fn) : fn(),
     setWorktab() {},
     setPageTitle() {},
     default: {
       start() {},
+      done() {},
+      remove() {},
       async get(config) {
         const name = config.url.split("/").pop();
         requests.push({ name, ...config, at: now });
@@ -146,7 +152,7 @@ function fixture() {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
       },
-    }).outputText;
+    }).outputText.replaceAll("import.meta", "__importMeta");
     vm.runInNewContext(code, {
       module,
       exports: module.exports,
@@ -154,6 +160,15 @@ function fixture() {
       console: { warn() {}, error() {} },
       localStorage: storage,
       sessionStorage: storage,
+      document: { documentElement: { classList: { contains: () => false } } },
+      __importMeta: { hot: { dispose: (callback) => disposers.push(callback) } },
+      ElLoading: {
+        service() {
+          const overlay = { visible: true, close() { this.visible = false; } };
+          overlays.push(overlay);
+          return overlay;
+        },
+      },
       Date: class extends Date {
         static now() {
           return now;
@@ -174,10 +189,12 @@ function fixture() {
   const errors = load("utils/http/error.ts");
   Object.assign(stubs, errors);
   Object.assign(stubs, load("api/auth.ts"));
+  Object.assign(stubs, load("utils/ui/loading.ts"));
   const guard = load("router/guards/beforeEach.ts");
   Object.assign(stubs, guard);
   user = load("store/modules/user.ts").useUserStore();
   guard.setupBeforeEachGuard(router);
+  load("router/guards/afterEach.ts").setupAfterEachGuard(router);
   return {
     router,
     user,
@@ -185,6 +202,20 @@ function fixture() {
     errors,
     requests,
     messages,
+    overlays,
+    loadingService: stubs.loadingService,
+    reloadGuardExports() {
+      Object.assign(stubs, load("router/guards/beforeEach.ts"));
+    },
+    disposeLoading() {
+      disposers.forEach((dispose) => dispose());
+    },
+    deferRender() {
+      deferRender = true;
+    },
+    render() {
+      while (renderCallbacks.length) renderCallbacks.shift()();
+    },
     sequence(name, ...actions) {
       responses.set(name, actions);
     },
@@ -585,4 +616,90 @@ test("slow failed request consumes the shared retry deadline", async () => {
     f.requests.filter((r) => r.name === "menu").map((r) => r.timeout),
     [15000, 5000],
   );
+});
+
+test("navigation completes its actual loading when guard exports are re-evaluated", async () => {
+  const f = fixture();
+  f.user.setLoginStatus(true);
+  let release;
+  f.pause(new Promise((resolve) => { release = resolve; }));
+  const navigation = f.router.push("/system/user");
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 1);
+  f.reloadGuardExports();
+  release();
+  await navigation;
+  assert.equal(f.router.currentRoute.value.path, "/system/user");
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
+});
+
+test("a deferred old afterEach does not close a newer navigation loading", async () => {
+  const f = fixture();
+  f.user.setLoginStatus(true);
+  f.deferRender();
+  await f.router.push("/system/user");
+  const newOwner = {};
+  const closeNew = f.loadingService.showLoading(newOwner);
+  f.render();
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 1);
+  closeNew();
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
+});
+
+test("failure, cancellation and logout release route loading", async () => {
+  const f = fixture();
+  f.user.setLoginStatus(true);
+  f.fail(new Error("menu unavailable"));
+  await f.router.push("/system/user");
+  assert.equal(f.router.currentRoute.value.name, "Exception500");
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
+  f.fail(null);
+  f.user.setLoginStatus(true);
+  let release;
+  f.pause(new Promise((resolve) => { release = resolve; }));
+  const navigation = f.router.push("/system/user");
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 1);
+  f.user.logOut();
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
+  release();
+  await navigation;
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
+});
+
+test("loading module disposal closes its owned overlay", () => {
+  const f = fixture();
+  f.loadingService.showLoading({});
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 1);
+  f.disposeLoading();
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
+});
+
+test("cancelled concurrent navigation cannot close the current initialization", async () => {
+  const f = fixture();
+  f.user.setLoginStatus(true);
+  let release;
+  f.pause(new Promise((resolve) => { release = resolve; }));
+  const first = f.router.push("/system/user?tab=old");
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  const second = f.router.push("/system/user?tab=new");
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 1);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(f.router.currentRoute.value.fullPath, "/system/user?tab=new");
+  assert.equal(f.calls(), 1);
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
+});
+
+test("navigation component failure releases its loading", async () => {
+  const f = fixture();
+  f.user.setLoginStatus(true);
+  await f.router.push("/system/user");
+  f.router.addRoute({
+    path: "/broken-component",
+    component: () => Promise.reject(new Error("component unavailable")),
+  });
+  await assert.rejects(f.router.push("/broken-component"), /component unavailable/);
+  assert.equal(f.overlays.filter((overlay) => overlay.visible).length, 0);
 });
