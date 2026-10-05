@@ -27,7 +27,6 @@ import { RouteRegistry, MenuProcessor, IframeRouteManager } from '../core'
 let routeRegistry: RouteRegistry | null = null
 const menuProcessor = new MenuProcessor()
 
-let pendingLoading = false
 let routeInitFailed = false
 let routeInitErrorPage = 'Exception500'
 let routeGeneration = 0
@@ -38,11 +37,11 @@ class NoAccessibleRoutesError extends Error {}
 let routeInitPromise: Promise<AppRouteRecord[]> | null = null
 
 export function getPendingLoading(): boolean {
-  return pendingLoading
+  return loadingService.isLoading()
 }
 
 export function resetPendingLoading(): void {
-  pendingLoading = false
+  loadingService.hideLoading()
 }
 
 export function getRouteInitFailed(): boolean {
@@ -50,6 +49,7 @@ export function getRouteInitFailed(): boolean {
 }
 
 export function resetRouteInitState(): void {
+  loadingService.hideLoading()
   routeGeneration += 1
   routeInitFailed = false
   routeInitPromise = null
@@ -68,7 +68,7 @@ export function setupBeforeEachGuard(router: Router): void {
         await handleRouteGuard(to, from, next, router)
       } catch (error) {
         console.error('[RouteGuard] Failed to process beforeEach guard:', error)
-        closeLoading()
+        closeLoading(to)
         next({ name: 'Exception500' })
       }
     }
@@ -77,7 +77,7 @@ export function setupBeforeEachGuard(router: Router): void {
 
 export async function ensureDynamicRoutesReady(
   router: Router,
-  options: { showLoading?: boolean } = {}
+  options: { showLoading?: boolean; loadingOwner?: object } = {}
 ): Promise<AppRouteRecord[]> {
   ensureRouteRegistry(router)
 
@@ -91,7 +91,7 @@ export async function ensureDynamicRoutesReady(
   }
 
   if (options.showLoading) {
-    openLoading()
+    openLoading(options.loadingOwner)
   }
 
   if (!routeInitPromise) {
@@ -124,24 +124,12 @@ function ensureRouteRegistry(router: Router): void {
   }
 }
 
-function closeLoading(): void {
-  if (!pendingLoading) {
-    return
-  }
-
-  nextTick(() => {
-    loadingService.hideLoading()
-    pendingLoading = false
-  })
+function closeLoading(owner: object): void {
+  nextTick(() => loadingService.hideLoading(owner))
 }
 
-function openLoading(): void {
-  if (pendingLoading) {
-    return
-  }
-
-  pendingLoading = true
-  loadingService.showLoading()
+function openLoading(owner?: object): void {
+  loadingService.showLoading(owner)
 }
 
 function shouldShowRouteLoading(
@@ -169,11 +157,11 @@ async function handleRouteGuard(
   }
 
   if (shouldShowRouteLoading(to, userStore)) {
-    openLoading()
+    openLoading(to)
   }
 
   if (routeInitFailed) {
-    closeLoading()
+    closeLoading(to)
     if (isStaticRoute(to.path)) {
       next()
     } else {
@@ -184,11 +172,14 @@ async function handleRouteGuard(
 
   if (shouldInitializeDynamicRoutes(to) && !routeRegistry?.isRegistered() && userStore.isLogin) {
     try {
-      const menuList = await ensureDynamicRoutesReady(router, { showLoading: true })
+      const menuList = await ensureDynamicRoutesReady(router, {
+        showLoading: true,
+        loadingOwner: to
+      })
       continueWithDynamicRoutes(to, next, router, menuList)
     } catch (error) {
       console.error('[RouteGuard] Failed to initialize dynamic routes:', error)
-      closeLoading()
+      closeLoading(to)
 
       if (error instanceof RouteInitializationCancelled || isUnauthorizedError(error)) {
         next(false)
@@ -239,7 +230,7 @@ function continueWithDynamicRoutes(
   }
 
   if (!isRegisteredRouteTarget(router, to)) {
-    closeLoading()
+    closeLoading(to)
     const { homePath } = useCommon()
     const fallbackPath = homePath.value || findDefaultMenuPath(menuList) || '/'
     console.warn(`[RouteGuard] Missing route for path "${to.path}", redirecting to home page.`)
