@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type ConfigEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -11,9 +11,41 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import tailwindcss from '@tailwindcss/vite'
 // import { visualizer } from 'rollup-plugin-visualizer'
 
-export default ({ mode }: { mode: string }) => {
+/** 任何模式下都必须存在的环境变量 */
+const REQUIRED_ENV_KEYS = ['VITE_VERSION', 'VITE_PORT', 'VITE_BASE_URL', 'VITE_API_URL'] as const
+
+/** 仅开发服务（`vite dev`）需要的环境变量 */
+const REQUIRED_DEV_ENV_KEYS = ['VITE_API_PROXY_URL'] as const
+
+/**
+ * 关键 env 缺失时直接失败，而不是把 `undefined` 代入 baseURL / proxy target
+ * 引发连锁 404、白屏一类难以定位的问题。
+ */
+function assertRequiredEnv(env: Record<string, string>, command: string, mode: string): void {
+  const required = [
+    ...REQUIRED_ENV_KEYS,
+    ...(command === 'serve' ? REQUIRED_DEV_ENV_KEYS : [])
+  ]
+  const missing = required.filter((key) => {
+    const value: string | undefined = env[key]
+    return value === undefined || value.trim() === ''
+  })
+
+  if (missing.length > 0) {
+    throw new Error(
+      [
+        `[env] 缺少必需的环境变量（mode=${mode}, command=${command}）：`,
+        ...missing.map((key) => `  - ${key}`),
+        '请参考 .env.example / .env.development.example 补全后重试。'
+      ].join('\n')
+    )
+  }
+}
+
+export default ({ mode, command }: ConfigEnv) => {
   const root = process.cwd()
   const env = loadEnv(mode, root)
+  assertRequiredEnv(env, command, mode)
   const { VITE_VERSION, VITE_PORT, VITE_BASE_URL, VITE_API_URL, VITE_API_PROXY_URL } = env
 
   console.log(`🚀 API_URL = ${VITE_API_URL}`)
@@ -26,7 +58,6 @@ export default ({ mode }: { mode: string }) => {
     base: VITE_BASE_URL,
     server: {
       port: Number(VITE_PORT),
-      strictPort: true,
       proxy: {
         '/api': {
           target: VITE_API_PROXY_URL,
@@ -88,6 +119,13 @@ export default ({ mode }: { mode: string }) => {
       // 自动按需导入组件
       Components({
         dts: 'src/types/import/components.d.ts',
+        // 显式固定扫描目录：避免默认值随版本变化，使组件解析范围可预期
+        dirs: ['src/components'],
+        deep: true,
+        extensions: ['vue'],
+        // 决策：不允许同名覆盖。插件视图不得静默遮蔽核心组件，
+        // 同名冲突必须在编译期暴露而不是让布局解析到意外实现。
+        allowOverrides: false,
         resolvers: [ElementPlusResolver()]
       }),
       // 按需定制主题配置

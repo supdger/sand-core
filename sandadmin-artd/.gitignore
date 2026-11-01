@@ -6,6 +6,9 @@ dist-ssr
 .cursorrules
 
 # Auto-generated files
+# 注意：本文件的生成物清单与 sand-package system-update-worker 的
+# SandSystemUpdateRuntime::GENERATED 同步维护——新增生成物须两处同改，
+# 否则生成文件会进入恢复指纹并再次锁死升级恢复。
 src/types/import/auto-imports.d.ts
 src/types/import/components.d.ts
 .auto-import.json

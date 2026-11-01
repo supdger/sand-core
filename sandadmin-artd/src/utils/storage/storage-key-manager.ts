@@ -61,15 +61,56 @@ export class StorageKeyManager {
   }
 
   /**
-   * 将数据从旧版本迁移到当前版本
+   * 校验待迁移数据的形状
+   *
+   * 持久化内容必须是 JSON 对象（pinia persistedstate 的序列化形态）。
+   * 盲拷贝会把回滚/跨版本留下的坏数据直接喂给 store，再传导到布局组件。
+   */
+  private parseMigratableState(raw: string): Record<string, unknown> | null {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return null
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    return parsed as Record<string, unknown>
+  }
+
+  /**
+   * 校验来源键的版本段可识别，避免从无法判定来源的键迁移
+   */
+  private isMigratableSource(fromKey: string): boolean {
+    const version = StorageConfig.extractVersionFromKey(fromKey)
+    return typeof version === 'string' && version.length > 0
+  }
+
+  /**
+   * 将数据从旧版本迁移到当前版本（带形状/版本校验）
    */
   private migrateData(fromKey: string, toKey: string): void {
     try {
       const existingData = localStorage.getItem(fromKey)
-      if (existingData) {
-        localStorage.setItem(toKey, existingData)
-        console.info(`[Storage] 已迁移数据: ${fromKey} → ${toKey}`)
+      if (!existingData) {
+        return
       }
+
+      if (!this.isMigratableSource(fromKey)) {
+        console.warn(`[Storage] 跳过迁移：来源键版本无法识别 ${fromKey}`)
+        return
+      }
+
+      const state = this.parseMigratableState(existingData)
+      if (!state) {
+        console.warn(`[Storage] 跳过迁移：数据形状不符（非 JSON 对象）${fromKey}`)
+        return
+      }
+
+      // 以校验后的结构重新序列化，顺带剔除不可序列化的残留
+      localStorage.setItem(toKey, JSON.stringify(state))
+      console.info(`[Storage] 已迁移数据: ${fromKey} → ${toKey}`)
     } catch (error) {
       console.warn(`[Storage] 数据迁移失败: ${fromKey}`, error)
     }

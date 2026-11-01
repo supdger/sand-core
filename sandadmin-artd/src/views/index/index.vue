@@ -21,6 +21,15 @@
 </template>
 
 <script setup lang="ts">
+  // 静态 import：布局解析不得依赖 unplugin-vue-components 的内存映射，
+  // 否则 src/components 被整体交换后会出现 "Failed to resolve component" 白屏。
+  import {
+    ArtSidebarMenu,
+    ArtHeaderBar,
+    ArtPageContent,
+    ArtGlobalComponent
+  } from '@/components/core/layouts/layout-components'
+
   defineOptions({ name: 'AppLayout' })
 </script>
 
