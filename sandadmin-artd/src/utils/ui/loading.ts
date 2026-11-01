@@ -55,6 +55,38 @@ interface LoadingInstance {
 
 let loadingInstance: LoadingInstance | null = null
 let loadingOwner: object | null = null
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 遮罩绝对看门狗上限（毫秒）
+ *
+ * 任何 owner 不一致、守卫早退、热替换或异常路径都可能漏掉 hideLoading，
+ * 残留的全屏遮罩在用户眼里就是白屏死局，必须有硬上限强制关闭。
+ */
+const LOADING_WATCHDOG_TIMEOUT = 20000
+
+function clearWatchdog(): void {
+  if (watchdogTimer !== null) {
+    clearTimeout(watchdogTimer)
+    watchdogTimer = null
+  }
+}
+
+function armWatchdog(): void {
+  clearWatchdog()
+  watchdogTimer = setTimeout(() => {
+    watchdogTimer = null
+    if (!loadingInstance) return
+    console.warn('[Loading] 全屏遮罩超过上限未关闭，已强制关闭')
+    loadingService.forceHide()
+    ElMessage({
+      type: 'warning',
+      offset: 40,
+      duration: 6000,
+      message: '页面加载超时，已自动结束等待。请重试或刷新页面。'
+    })
+  }, LOADING_WATCHDOG_TIMEOUT)
+}
 
 export const loadingService = {
   /**
@@ -71,6 +103,7 @@ export const loadingService = {
       loadingInstance = ElLoading.service(config)
     }
     loadingOwner = owner
+    armWatchdog()
     return () => this.hideLoading(owner)
   },
 
@@ -84,8 +117,20 @@ export const loadingService = {
   hideLoading(owner?: object): void {
     // A cancelled navigation must not close a later navigation's loading.
     if (owner && owner !== loadingOwner) return
+    this.forceHide()
+  },
+
+  /**
+   * 无视 owner 强制关闭遮罩（看门狗、全局异常兜底使用）
+   */
+  forceHide(): void {
+    clearWatchdog()
     if (loadingInstance) {
-      loadingInstance.close()
+      try {
+        loadingInstance.close()
+      } catch (error) {
+        console.warn('[Loading] 关闭遮罩失败:', error)
+      }
       loadingInstance = null
       loadingOwner = null
     }
@@ -93,5 +138,5 @@ export const loadingService = {
 }
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => loadingService.hideLoading())
+  import.meta.hot.dispose(() => loadingService.forceHide())
 }

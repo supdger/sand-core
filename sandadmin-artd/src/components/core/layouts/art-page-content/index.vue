@@ -79,14 +79,35 @@
     return pageTransition.value
   })
 
+  /** 遮罩与刷新闩锁的释放定时器：任何异常路径都不得让内容区永久空白 */
+  let maskTimer: ReturnType<typeof setTimeout> | null = null
+  let maskWatchdog: ReturnType<typeof setTimeout> | null = null
+  let refreshWatchdog: ReturnType<typeof setTimeout> | null = null
+
+  const clearTimer = (timer: ReturnType<typeof setTimeout> | null): null => {
+    if (timer !== null) clearTimeout(timer)
+    return null
+  }
+
+  const hideTransitionMask = (): void => {
+    maskTimer = clearTimer(maskTimer)
+    maskWatchdog = clearTimer(maskWatchdog)
+    showTransitionMask.value = false
+  }
+
   // 监听全屏状态变化，显示过渡遮罩
   watch(isFullPage, (val, oldVal) => {
     if (val !== oldVal) {
       showTransitionMask.value = true
+      maskTimer = clearTimer(maskTimer)
+      maskWatchdog = clearTimer(maskWatchdog)
       // 延迟隐藏遮罩，给足时间让页面完成切换
-      setTimeout(() => {
+      maskTimer = setTimeout(() => {
+        maskTimer = null
         showTransitionMask.value = false
       }, 50)
+      // 看门狗：主定时器被异常打断时兜底释放，避免全屏遮罩永久盖住内容
+      maskWatchdog = setTimeout(hideTransitionMask, 1000)
     }
 
     nextTick(() => {
@@ -117,11 +138,29 @@
     })
   )
 
+  /** 恢复渲染闩锁（幂等） */
+  const releaseRefreshLatch = (): void => {
+    refreshWatchdog = clearTimer(refreshWatchdog)
+    isRefresh.value = true
+  }
+
   const reload = () => {
-    isRefresh.value = false
-    nextTick(() => {
-      isRefresh.value = true
-    })
+    try {
+      isRefresh.value = false
+      // 看门狗：nextTick 回调抛错时兜底恢复，防止内容区永久空白
+      refreshWatchdog = clearTimer(refreshWatchdog)
+      refreshWatchdog = setTimeout(releaseRefreshLatch, 2000)
+
+      nextTick()
+        .then(releaseRefreshLatch)
+        .catch((error: unknown) => {
+          console.error('[ArtPageContent] 刷新内容区失败:', error)
+          releaseRefreshLatch()
+        })
+    } catch (error) {
+      console.error('[ArtPageContent] 刷新内容区异常:', error)
+      releaseRefreshLatch()
+    }
   }
 
   watch(refresh, reload, { flush: 'post' })
@@ -132,5 +171,11 @@
     nextTick(() => {
       isFirstLoad.value = false
     })
+  })
+
+  onUnmounted(() => {
+    maskTimer = clearTimer(maskTimer)
+    maskWatchdog = clearTimer(maskWatchdog)
+    refreshWatchdog = clearTimer(refreshWatchdog)
   })
 </script>

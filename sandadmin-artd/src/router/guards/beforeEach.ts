@@ -68,7 +68,8 @@ export function setupBeforeEachGuard(router: Router): void {
         await handleRouteGuard(to, from, next, router)
       } catch (error) {
         console.error('[RouteGuard] Failed to process beforeEach guard:', error)
-        closeLoading(to)
+        // 守卫自身抛错属于不可控路径，遮罩必须无条件释放
+        loadingService.forceHide()
         next({ name: 'Exception500' })
       }
     }
@@ -195,7 +196,7 @@ async function handleRouteGuard(
     return
   }
 
-  if (handleRootPathRedirect(to, next)) {
+  if (handleRootPathRedirect(to, next, router)) {
     return
   }
 
@@ -220,6 +221,8 @@ function continueWithDynamicRoutes(
   menuList: AppRouteRecord[]
 ): void {
   if (isStaticRoute(to.path)) {
+    // 目标是静态路由时后续导航不会再开遮罩，这里必须自己收尾，否则遮罩永久残留
+    closeLoading(to)
     next({
       path: to.path,
       query: to.query,
@@ -232,8 +235,13 @@ function continueWithDynamicRoutes(
   if (!isRegisteredRouteTarget(router, to)) {
     closeLoading(to)
     const { homePath } = useCommon()
-    const fallbackPath = homePath.value || findDefaultMenuPath(menuList) || '/'
+    const fallbackPath =
+      resolvableFallbackPath(router, homePath.value) ||
+      findDefaultMenuPath(router, menuList) ||
+      '/'
     console.warn(`[RouteGuard] Missing route for path "${to.path}", redirecting to home page.`)
+    // 静默跳首页会让用户以为「点了没反应」，必须给出可见解释
+    notifyFallbackRedirect('该页面不可用或无访问权限，已返回首页。')
     next({
       path: fallbackPath,
       replace: true
@@ -263,25 +271,63 @@ function isRegisteredRouteTarget(router: Router, to: RouteLocationNormalized): b
   return resolved.matched.length > 0
 }
 
-function findDefaultMenuPath(menuList: AppRouteRecord[]): string {
+/**
+ * 候选兜底路径必须先验证可解析，否则会把用户送进另一个 404/空白
+ *
+ * 只接受绝对路径：相对路径会被 vue-router 按「当前位置」解析，
+ * 可能解析成一个与预期完全无关却恰好匹配的路由。
+ */
+function resolvableFallbackPath(router: Router, path: string | undefined): string {
+  if (!path || path === '/' || !path.startsWith('/')) return ''
+  try {
+    const resolved = router.resolve({ path })
+    if (resolved.name === 'Exception404' || resolved.matched.length === 0) return ''
+    return path
+  } catch (error) {
+    console.warn(`[RouteGuard] Fallback path "${path}" is not resolvable:`, error)
+    return ''
+  }
+}
+
+function findDefaultMenuPath(router: Router, menuList: AppRouteRecord[]): string {
   for (const item of menuList) {
-    if (typeof item.redirect === 'string' && item.redirect !== '/') {
-      return item.redirect
+    if (typeof item.redirect === 'string') {
+      const redirect = resolvableFallbackPath(router, item.redirect)
+      if (redirect) {
+        return redirect
+      }
     }
 
     if (item.children?.length) {
-      const childPath = findDefaultMenuPath(item.children)
+      const childPath = findDefaultMenuPath(router, item.children)
       if (childPath) {
         return childPath
       }
     }
 
-    if (item.path && item.path !== '/' && item.meta?.isHide !== true) {
-      return item.path
+    if (item.path && item.meta?.isHide !== true) {
+      const candidate = resolvableFallbackPath(router, item.path)
+      if (candidate) {
+        return candidate
+      }
     }
   }
 
   return ''
+}
+
+/** 兜底重定向的可见提示（同一轮导航只提示一次，避免连环跳转刷屏） */
+let lastFallbackNoticeAt = 0
+function notifyFallbackRedirect(message: string): void {
+  const now = Date.now()
+  if (now - lastFallbackNoticeAt < 1000) return
+  lastFallbackNoticeAt = now
+  ElMessage({
+    type: 'warning',
+    offset: 40,
+    duration: 4000,
+    message
+  })
 }
 
 function handleLoginStatus(
@@ -442,15 +488,26 @@ function initializationErrorPage(error: unknown): string {
     : 'Exception500'
 }
 
-function handleRootPathRedirect(to: RouteLocationNormalized, next: NavigationGuardNext): boolean {
+function handleRootPathRedirect(
+  to: RouteLocationNormalized,
+  next: NavigationGuardNext,
+  router: Router
+): boolean {
   if (to.path !== '/') {
     return false
   }
 
   const { homePath } = useCommon()
-  if (homePath.value && homePath.value !== '/') {
-    next({ path: homePath.value, replace: true })
+  const target = resolvableFallbackPath(router, homePath.value)
+  if (target) {
+    next({ path: target, replace: true })
     return true
+  }
+
+  if (homePath.value && homePath.value !== '/') {
+    // 配置的首页解析不了：说明菜单/权限与配置不一致，必须让用户看见而不是静默落到 404
+    console.warn(`[RouteGuard] Home path "${homePath.value}" is not resolvable.`)
+    notifyFallbackRedirect('首页配置不可用，已停留在默认页面，请联系管理员检查菜单权限。')
   }
 
   return false
