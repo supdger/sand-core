@@ -14,43 +14,7 @@
     "lint": "eslint",
     "fix": "eslint --fix",
     "lint:prettier": "prettier --write \"**/*.{js,cjs,ts,json,tsx,css,less,scss,vue,html,md}\"",
-    "lint:stylelint": "stylelint  \"**/*.{css,scss,vue}\" --fix",
-    "lint:lint-staged": "lint-staged",
-    "prepare": "husky",
-    "commit": "git-cz",
-    "clean:dev": "tsx scripts/clean-dev.ts"
-  },
-  "config": {
-    "commitizen": {
-      "path": "node_modules/cz-git"
-    }
-  },
-  "lint-staged": {
-    "*.{js,ts,mjs,mts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{cjs,json,jsonc}": [
-      "prettier --write"
-    ],
-    "*.vue": [
-      "eslint --fix",
-      "stylelint --fix --allow-empty-input",
-      "prettier --write"
-    ],
-    "*.{html,htm}": [
-      "prettier --write"
-    ],
-    "*.{scss,css,less}": [
-      "stylelint --fix --allow-empty-input",
-      "prettier --write"
-    ],
-    "*.{md,mdx}": [
-      "prettier --write"
-    ],
-    "*.{yaml,yml}": [
-      "prettier --write"
-    ]
+    "lint:stylelint": "stylelint  \"**/*.{css,scss,vue}\" --fix"
   },
   "dependencies": {
     "@arco-design/web-vue": "^2.58.0",
@@ -84,8 +48,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.4.1",
-    "@commitlint/config-conventional": "^19.4.1",
     "@eslint/js": "^9.9.1",
     "@types/node": "^24.0.5",
     "@types/spark-md5": "^3.0.5",
@@ -93,16 +55,12 @@
     "@typescript-eslint/parser": "^8.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/compiler-sfc": "^3.0.5",
-    "commitizen": "^4.3.0",
-    "cz-git": "^1.11.1",
     "eslint": "^9.9.1",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-vue": "^9.27.0",
     "globals": "^15.9.0",
-    "husky": "^9.1.5",
     "less": "^4.8.1",
-    "lint-staged": "^15.5.2",
     "prettier": "^3.5.3",
     "rollup-plugin-visualizer": "^5.12.0",
     "sass": "^1.81.0",
