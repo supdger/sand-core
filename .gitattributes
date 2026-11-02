@@ -1,0 +1,24 @@
+# 由 SandAdmin\Core\PublishExclusions 派生，使用 tools/assert-publish-exclusions.php 校验
+.DS_Store export-ignore
+._* export-ignore
+.git/ export-ignore
+.gitattributes export-ignore
+.github/ export-ignore
+.husky/ export-ignore
+.idea/ export-ignore
+.vscode/ export-ignore
+/sandadmin-artd/.env export-ignore
+/sandadmin-artd/.env.development export-ignore
+/sandadmin-artd/.env.production export-ignore
+/sandadmin-artd/scripts/clean-dev.ts export-ignore
+Thumbs.db export-ignore
+commitlint.config.cjs export-ignore
+composer.lock export-ignore
+desktop.ini export-ignore
+dist/ export-ignore
+lint-staged.config.cjs export-ignore
+lint-staged.config.js export-ignore
+lint-staged.config.mjs export-ignore
+node_modules/ export-ignore
+tests/ export-ignore
+vendor/ export-ignore

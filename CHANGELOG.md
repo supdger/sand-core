@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.2.6（2026-11-02）
+
+- Composer 发布生命周期加固：安装/更新先装后端载荷再发布前端，前端失败降级为 `[sandadmin]` 告警并附 `composer run-script sand:publish` 恢复命令，不再中止 Composer；无清单非空目标改为逐文件 sha256 收养判定；`.pending` 两阶段清单与中断重入；升级删除集与用户修改跳过；`uninstall` 清单驱动且 `config/` 仅首次写入；`extra.sandadmin.frontend-path` 显式目标路径与越界/符号链接校验；`SAND_FRONTEND_PUBLISH=skip|force` 逃生门。
+- 前端 env 演进：按 example 键集补齐缺失键；`VITE_LOCK_ENCRYPT_KEY` 安装期随机生成、`VITE_VERSION` 取包版本；安装器写 `.env` 统一加引号转义。
+- 发布面收敛：单一排除规则源（`PublishExclusions`）驱动 publisher/archive/export-ignore；载荷剥离 husky/commitlint/lint-staged/clean-dev/vscode 等开发物；新增 `assert-frontend-parity`、`assert-publish-exclusions` 门禁与 publisher/install/target 测试。
+
 ## 0.2.5（2026-10-31）
 
 - 管理端白屏兜底：新增纯 HTML 静态错误边界（App.vue/main.ts/index.html 三层），渲染失败呈现可诊断错误页（重试/重载/重置本地状态）而非白屏；布局组件静态 import + 全局注册（`layout-components.ts`），目录被宿主升级/恢复 rename 交换后不再依赖 unplugin 内存映射；加载遮罩 20 秒看门狗；chunk 加载与 `vite:preloadError` 提供一键重载；`routeInitFailed` 可经"重试"清除、异常页按钮先重置初始化状态；动态路由兜底重定向可见化；持久化状态迁移做形状/版本校验、腐坏检测接入真实登录态；关键 env 缺失启动即报错；`ArtPageContent` 刷新/过渡闩锁以 finally/看门狗释放；`.gitignore` 与 sand-package 恢复指纹生成物清单注明同步维护。配套 SandPackage 变更见 `openspec/changes/archive/2026-10-31-harden-system-update-recovery/`。

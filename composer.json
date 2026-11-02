@@ -38,12 +38,37 @@
   },
   "archive": {
     "exclude": [
-      "/sandadmin-artd/node_modules",
-      "/sandadmin-artd/dist",
-      "/sandadmin-artd/.env*",
       "/**/.DS_Store",
+      "/**/._*",
+      "/**/.git",
+      "/**/.gitattributes",
+      "/**/.github",
+      "/**/.husky",
       "/**/.idea",
-      "/**/.vscode"
+      "/**/.vscode",
+      "/**/Thumbs.db",
+      "/**/commitlint.config.cjs",
+      "/**/composer.lock",
+      "/**/desktop.ini",
+      "/**/dist",
+      "/**/lint-staged.config.cjs",
+      "/**/lint-staged.config.js",
+      "/**/lint-staged.config.mjs",
+      "/**/node_modules",
+      "/**/tests",
+      "/**/vendor",
+      "/sandadmin-artd/.env",
+      "/sandadmin-artd/.env.development",
+      "/sandadmin-artd/.env.production",
+      "/sandadmin-artd/scripts/clean-dev.ts"
     ]
+  },
+  "scripts": {
+    "sand:publish": [
+      "@php tools/publish-frontend.php"
+    ]
+  },
+  "scripts-descriptions": {
+    "sand:publish": "Publish or reconcile the sandadmin-artd frontend payload (idempotent)"
   }
 }

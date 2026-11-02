@@ -57,7 +57,12 @@ class InstallController extends OpenController
      */
     protected function frontendEntrySettings(): array
     {
-        $frontendRoot = \SandAdmin\Core\Install::frontendTarget();
+        try {
+            $frontendRoot = \SandAdmin\Core\Install::frontendTarget();
+        } catch (Throwable) {
+            // 目标路径越界或不可解析时只影响端口探测，不阻塞安装页渲染。
+            $frontendRoot = '';
+        }
         $configuredUrl = (string) config('plugin.sandadmin.app.frontend_url', '');
         $data = [
             'frontendPort' => 3006,
@@ -74,7 +79,7 @@ class InstallController extends OpenController
                 $data['frontendError'] = 'SANDADMIN_FRONTEND_URL 配置无效。请填写不含用户名、密码或控制字符的 HTTP(S) 地址或同源路径。';
             }
         }
-        foreach (['.env', '.env.local', '.env.development', '.env.development.local'] as $name) {
+        foreach ($frontendRoot === '' ? [] : ['.env', '.env.local', '.env.development', '.env.development.local'] as $name) {
             $frontendEnv = $frontendRoot . DIRECTORY_SEPARATOR . $name;
             if (is_file($frontendEnv)) {
                 foreach (file($frontendEnv, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
@@ -187,36 +192,36 @@ class InstallController extends OpenController
 
         $this->generateConfig($driver);
 
-        $env_config = <<<EOF
-# 数据库配置
-DB_TYPE = $driver
-DB_HOST = $host
-DB_PORT = $port
-DB_NAME = $database
-DB_USER = $user
-DB_PASSWORD = $password
-DB_PREFIX = 
-
-# 缓存方式
-CACHE_MODE = file
-
-# Redis配置
-REDIS_HOST = 127.0.0.1
-REDIS_PORT = 6379
-REDIS_PASSWORD = ''
-REDIS_DB = 0
-DB_CHARSET = {$this->getCharset($driver)}
-
-# 验证码配置
-CAPTCHA_MODE = cache
-
-#前端目录
-FRONTEND_DIR = sandadmin-artd
-
-# 服务端口（默认值可按项目环境调整）
-SANDADMIN_SERVER_PORT = 8787
-SANDADMIN_CHANNEL_PORT = 2206
-EOF;
+        $env_config = $this->renderEnv([
+            '# 数据库配置',
+            'DB_TYPE' => $driver,
+            'DB_HOST' => (string) $host,
+            'DB_PORT' => (string) $port,
+            'DB_NAME' => $database,
+            'DB_USER' => (string) $user,
+            'DB_PASSWORD' => (string) $password,
+            'DB_PREFIX' => '',
+            'DB_CHARSET' => $this->getCharset($driver),
+            '',
+            '# 缓存方式',
+            'CACHE_MODE' => 'file',
+            '',
+            '# Redis配置',
+            'REDIS_HOST' => '127.0.0.1',
+            'REDIS_PORT' => '6379',
+            'REDIS_PASSWORD' => '',
+            'REDIS_DB' => '0',
+            '',
+            '# 验证码配置',
+            'CAPTCHA_MODE' => 'cache',
+            '',
+            '# 前端目录',
+            'FRONTEND_DIR' => 'sandadmin-artd',
+            '',
+            '# 服务端口（默认值可按项目环境调整）',
+            'SANDADMIN_SERVER_PORT' => '8787',
+            'SANDADMIN_CHANNEL_PORT' => '2206',
+        ]);
         file_put_contents(base_path() . DIRECTORY_SEPARATOR . '.env', $env_config);
 
         // 尝试reload
@@ -233,6 +238,25 @@ EOF;
                 'notice' => '请在首次登录后立即修改默认密码。',
             ],
         ], '安装成功');
+    }
+
+    /**
+     * 渲染 .env 内容：整数键为注释或空行，字符串键为配置项。
+     * 所有值双引号包裹并转义反斜杠、双引号与 $，使含空格、#、引号的值不破坏 dotenv 解析。
+     */
+    protected function renderEnv(array $entries): string
+    {
+        $lines = [];
+        foreach ($entries as $key => $value) {
+            if (is_int($key)) {
+                $lines[] = (string) $value;
+                continue;
+            }
+            $escaped = str_replace(['\\', '"', '$'], ['\\\\', '\\"', '\\$'], (string) $value);
+            $lines[] = $key . ' = "' . $escaped . '"';
+        }
+
+        return implode(PHP_EOL, $lines) . PHP_EOL;
     }
 
     /**
