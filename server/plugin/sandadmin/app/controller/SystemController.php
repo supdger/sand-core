@@ -45,6 +45,7 @@ class SystemController extends BaseController
         $info['signed'] = $this->adminInfo['signed'];
         $info['realname'] = $this->adminInfo['realname'];
         $info['department'] = $this->adminInfo['deptList'];
+        $info['must_change_password'] = (int) ($this->adminInfo['must_change_password'] ?? 0) === 1;
         if ($this->adminInfo['id'] === 1) {
             $info['buttons'] = ['*'];
             $info['roles'] = ['super_admin'];

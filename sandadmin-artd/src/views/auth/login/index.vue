@@ -172,7 +172,7 @@
       loading.value = true
 
       // 登录请求
-      const { access_token, refresh_token } = await fetchLogin({
+      const { access_token, refresh_token, must_change_password } = await fetchLogin({
         username: formData.username,
         password: formData.password,
         code: formData.code,
@@ -187,8 +187,18 @@
       // 存储token和用户信息
       userStore.setToken(access_token, refresh_token)
       const userInfo = await fetchGetUserInfo()
-      userStore.setUserInfo(userInfo)
+      userStore.setUserInfo({
+        ...userInfo,
+        must_change_password:
+          must_change_password === true || userInfo.must_change_password === true
+      })
       userStore.setLoginStatus(true)
+
+      // 初始密码必须先修改：跳转改密页，修改前不进入后台
+      if (userStore.info.must_change_password === true) {
+        router.push({ name: 'ChangePassword' })
+        return
+      }
 
       // 登录成功处理
       showLoginSuccessNotice()

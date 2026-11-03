@@ -39,6 +39,9 @@ class {{class_name}} extends BaseModel
      */
     protected $table = '{{table_name}}';
 
+    // 含密码/密钥/令牌/验证码等敏感列时，请声明 $hidden（须同时保留基类的 'delete_time'），
+    // 否则列表接口会原样输出这些列。
+
 {% if source != db_source and source != '' %}
     /**
      * 数据库连接

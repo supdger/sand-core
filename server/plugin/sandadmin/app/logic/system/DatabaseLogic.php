@@ -8,6 +8,7 @@ namespace plugin\sandadmin\app\logic\system;
 
 use plugin\sandadmin\basic\think\BaseLogic;
 use plugin\sandadmin\exception\ApiException;
+use plugin\sandadmin\utils\SensitiveData;
 use support\think\Db;
 
 /**
@@ -221,10 +222,12 @@ SQL;
             // 查询软删除数据
             $request = request();
             $limit = $request ? ($request->input('limit') ?: 10) : 10;
-            return Db::table($table)->whereNotNull('delete_time')
+            // Db::table 直读不经模型 $hidden，输出前剔除 password/secret/token/验证码等敏感列。
+            $page = Db::table($table)->whereNotNull('delete_time')
                 ->order('delete_time', 'desc')
                 ->paginate($limit)
                 ->toArray();
+            return SensitiveData::stripSensitiveColumns($page);
         } else {
             return [];
         }

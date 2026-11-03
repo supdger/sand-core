@@ -5,3 +5,8 @@
 /sandadmin-artd/dist/
 /server/vendor/
 /server/runtime/
+# 安装令牌、安装锁与 JWT 密钥配置含运行时秘密，不得入库
+/server/.env
+/server/config/plugin/tinywan/jwt/
+install-token
+install.lock

@@ -185,6 +185,19 @@
     "submitBtnText": "提交",
     "backBtnText": "返回"
   },
+  "changePassword": {
+    "title": "修改初始密码",
+    "subTitle": "当前账号使用初始密码登录，必须先设置新密码（至少 12 位，且不能与原密码相同）后才能使用后台",
+    "oldPassword": "请输入当前密码",
+    "newPassword": "请输入新密码（至少 12 位）",
+    "confirmPassword": "请再次输入新密码",
+    "submitBtnText": "修改密码并重新登录",
+    "backBtnText": "退出登录",
+    "tooShort": "新密码至少 12 位",
+    "notMatch": "两次输入的新密码不一致",
+    "sameAsOld": "新密码不能与当前密码相同",
+    "success": "密码已修改，请使用新密码重新登录"
+  },
   "register": {
     "title": "创建账号",
     "subTitle": "欢迎加入我们，请填写以下信息完成注册",
@@ -239,6 +252,9 @@
     },
     "forgetPassword": {
       "title": "忘记密码"
+    },
+    "changePassword": {
+      "title": "修改初始密码"
     },
     "outside": {
       "title": "内嵌页面"

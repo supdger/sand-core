@@ -593,6 +593,7 @@ CREATE TABLE "sand_system_user" (
   "create_time" timestamp(0) without time zone NULL DEFAULT NULL,
   "update_time" timestamp(0) without time zone NULL DEFAULT NULL,
   "delete_time" timestamp(0) without time zone NULL DEFAULT NULL,
+  "must_change_password" smallint NOT NULL DEFAULT 0,
   PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "idx_sand_system_user_uk_username" ON "sand_system_user" ("username");
@@ -600,8 +601,9 @@ CREATE INDEX "idx_sand_system_user_idx_dept_id" ON "sand_system_user" ("dept_id"
 
 -- ----------------------------
 -- Records of sand_system_user
+-- 初始管理员口令由安装器写入（password_hash）；此处 '!' 不是合法哈希，任何口令都无法通过校验。
 -- ----------------------------
-INSERT INTO "sand_system_user" VALUES (1, 'admin', '$2y$10$wnixh48uDnaW/6D9EygDd.OHJK0vQY/4nHaTjMKBCVDBP2NiTatqS', '祭道之上', '2', NULL, 'sandadmin@admin.com', '15888888888', 'SandAdmin是兼具设计美学与高效开发的后台系统!', 'statistics', 1, 1, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (1, 'admin', '!', '祭道之上', '2', NULL, 'sandadmin@admin.com', '15888888888', 'SandAdmin是兼具设计美学与高效开发的后台系统!', 'statistics', 1, 1, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL, 1);
 
 -- ----------------------------
 -- Table structure for sand_system_user_post

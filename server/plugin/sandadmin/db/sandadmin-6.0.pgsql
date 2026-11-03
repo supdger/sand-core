@@ -615,6 +615,7 @@ CREATE TABLE "sand_system_user" (
   "create_time" timestamp(0) without time zone NULL DEFAULT NULL,
   "update_time" timestamp(0) without time zone NULL DEFAULT NULL,
   "delete_time" timestamp(0) without time zone NULL DEFAULT NULL,
+  "must_change_password" smallint NOT NULL DEFAULT 0,
   PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "idx_sand_system_user_uk_username" ON "sand_system_user" ("username");
@@ -622,15 +623,17 @@ CREATE INDEX "idx_sand_system_user_idx_dept_id" ON "sand_system_user" ("dept_id"
 
 -- ----------------------------
 -- Records of sand_system_user
+-- 初始管理员口令由安装器写入（password_hash）；此处 '!' 不是合法哈希，任何口令都无法通过校验。
+-- 其余演示账号保持禁用，安装器会写入随机口令哈希。
 -- ----------------------------
-INSERT INTO "sand_system_user" VALUES (1, 'admin', '$2y$10$wnixh48uDnaW/6D9EygDd.OHJK0vQY/4nHaTjMKBCVDBP2NiTatqS', '祭道之上', '2', NULL, 'sandadmin@admin.com', '15888888888', 'SandAdmin是兼具设计美学与高效开发的后台系统!', 'statistics', 1, 1, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
-INSERT INTO "sand_system_user" VALUES (2, 'martin', '$2y$10$J3EkwRH8rNkveaanx1.j.ebRiBpnnVUGWa.i2MS3aNpb9ydAOolmm', '刘炽平', '2', NULL, 'martin@163.com', '15888888888', NULL, 'work', 1, 0, 1, '', NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
-INSERT INTO "sand_system_user" VALUES (3, 'allen', '$2y$10$H8d7riOjOiwPSopguEQ1fuKZz.fA0A54OvuzTqgJlbG1N3uOxEwM.', '张小龙', '', NULL, '', '15888888888', NULL, 'work', 10, 0, 1, '', NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
-INSERT INTO "sand_system_user" VALUES (4, 'mark', '$2y$10$sY/4StKVV.N/8Ock8J8kdeIOK4jS4tAUoYjkzvB8Tzy0fLh.wA2KS', '任宇昕', NULL, NULL, NULL, '15888888888', NULL, 'work', 11, 0, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
-INSERT INTO "sand_system_user" VALUES (5, 'dowson', '$2y$10$sY/4StKVV.N/8Ock8J8kdeIOK4jS4tAUoYjkzvB8Tzy0fLh.wA2KS', '汤道生', NULL, NULL, NULL, '15888888888', NULL, 'work', 12, 0, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
-INSERT INTO "sand_system_user" VALUES (10, 'timi_boss', '$2y$10$sY/4StKVV.N/8Ock8J8kdeIOK4jS4tAUoYjkzvB8Tzy0fLh.wA2KS', '姚晓光', NULL, NULL, '', '15888888888', NULL, 'work', 111, 0, 1, '', NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
-INSERT INTO "sand_system_user" VALUES (100, 'dev_wang', '$2y$10$sY/4StKVV.N/8Ock8J8kdeIOK4jS4tAUoYjkzvB8Tzy0fLh.wA2KS', '王程序员', NULL, NULL, NULL, '15888888888', NULL, 'work', 1111, 0, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
-INSERT INTO "sand_system_user" VALUES (101, 'dev_li', '$2y$10$sY/4StKVV.N/8Ock8J8kdeIOK4jS4tAUoYjkzvB8Tzy0fLh.wA2KS', '李策划', NULL, NULL, NULL, '15888888888', NULL, 'work', 1111, 0, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (1, 'admin', '!', '祭道之上', '2', NULL, 'sandadmin@admin.com', '15888888888', 'SandAdmin是兼具设计美学与高效开发的后台系统!', 'statistics', 1, 1, 1, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL, 1);
+INSERT INTO "sand_system_user" VALUES (2, 'martin', '!', '刘炽平', '2', NULL, 'martin@163.com', '15888888888', NULL, 'work', 1, 0, 2, '', NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (3, 'allen', '!', '张小龙', '', NULL, '', '15888888888', NULL, 'work', 10, 0, 2, '', NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (4, 'mark', '!', '任宇昕', NULL, NULL, NULL, '15888888888', NULL, 'work', 11, 0, 2, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (5, 'dowson', '!', '汤道生', NULL, NULL, NULL, '15888888888', NULL, 'work', 12, 0, 2, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (10, 'timi_boss', '!', '姚晓光', NULL, NULL, '', '15888888888', NULL, 'work', 111, 0, 2, '', NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (100, 'dev_wang', '!', '王程序员', NULL, NULL, NULL, '15888888888', NULL, 'work', 1111, 0, 2, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
+INSERT INTO "sand_system_user" VALUES (101, 'dev_li', '!', '李策划', NULL, NULL, NULL, '15888888888', NULL, 'work', 1111, 0, 2, NULL, NULL, NULL, 1, 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
 
 -- ----------------------------
 -- Table structure for sand_system_user_post
