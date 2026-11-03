@@ -185,6 +185,19 @@
     "submitBtnText": "Submit",
     "backBtnText": "Back"
   },
+  "changePassword": {
+    "title": "Change initial password",
+    "subTitle": "This account signed in with an initial password. Set a new password (at least 12 characters, different from the current one) before using the console",
+    "oldPassword": "Enter the current password",
+    "newPassword": "Enter a new password (at least 12 characters)",
+    "confirmPassword": "Enter the new password again",
+    "submitBtnText": "Change password and sign in again",
+    "backBtnText": "Sign out",
+    "tooShort": "The new password must be at least 12 characters",
+    "notMatch": "The two new passwords do not match",
+    "sameAsOld": "The new password must differ from the current one",
+    "success": "Password changed. Please sign in with the new password"
+  },
   "register": {
     "title": "Create account",
     "subTitle": "Welcome to join us, please fill in the following information to complete the registration",
@@ -239,6 +252,9 @@
     },
     "forgetPassword": {
       "title": "Forget Password"
+    },
+    "changePassword": {
+      "title": "Change Initial Password"
     },
     "outside": {
       "title": "Outside"

@@ -25,6 +25,12 @@ export const staticRoutes: AppRouteRecordRaw[] = [
     meta: { title: 'menus.login.title', isHideTab: true }
   },
   {
+    path: '/auth/change-password',
+    name: 'ChangePassword',
+    component: () => import('@views/auth/change-password/index.vue'),
+    meta: { title: 'menus.changePassword.title', isHideTab: true }
+  },
+  {
     path: '/auth/register',
     name: 'Register',
     component: () => import('@views/auth/register/index.vue'),

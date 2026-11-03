@@ -9,6 +9,7 @@ namespace plugin\sandadmin\app\event;
 use plugin\sandadmin\app\cache\ReflectionCache;
 use plugin\sandadmin\app\model\system\SystemLoginLog;
 use plugin\sandadmin\app\model\system\SystemOperLog;
+use plugin\sandadmin\utils\SensitiveData;
 
 class SystemUser
 {
@@ -86,13 +87,7 @@ class SystemUser
      */
     protected function filterParams($params): string
     {
-        $blackList = ['password', 'oldPassword', 'newPassword', 'confirmPassword'];
-        foreach ($params as $key => $value) {
-            if (in_array($key, $blackList)) {
-                $params[$key] = '******';
-            }
-        }
-        return json_encode($params, JSON_UNESCAPED_UNICODE);
+        return json_encode(SensitiveData::maskParams($params), JSON_UNESCAPED_UNICODE);
     }
 
     /**

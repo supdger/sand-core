@@ -24,7 +24,7 @@
  * ## 使用方式
  *
  * ```typescript
- * const params: Api.Auth.LoginParams = { userName: 'admin', password: '123456' }
+ * const params: Api.Auth.LoginParams = { userName: 'admin', password: 'your-admin-password' }
  * const response: Api.Auth.UserInfo = await fetchUserInfo()
  * ```
  *
@@ -96,6 +96,8 @@ declare namespace Api {
       expires_in: number
       access_token: string
       refresh_token: string
+      /** 首次登录必须先修改密码 */
+      must_change_password?: boolean
     }
 
     /** 用户信息 */
@@ -111,6 +113,8 @@ declare namespace Api {
       dashboard?: string
       gender?: string
       signed?: string
+      /** 首次登录必须先修改密码 */
+      must_change_password?: boolean
       department?: {
         id: number
         name: string

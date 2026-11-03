@@ -157,6 +157,16 @@ async function handleRouteGuard(
     return
   }
 
+  // 首次登录强制改密：改密前只允许停留在改密页（后端同样会拒绝其他接口）
+  if (
+    userStore.isLogin &&
+    userStore.info?.must_change_password === true &&
+    to.name !== 'ChangePassword'
+  ) {
+    next({ name: 'ChangePassword', replace: true })
+    return
+  }
+
   if (shouldShowRouteLoading(to, userStore)) {
     openLoading(to)
   }

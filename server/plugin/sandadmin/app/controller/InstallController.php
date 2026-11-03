@@ -11,6 +11,8 @@ use support\Request;
 use support\Response;
 use plugin\sandadmin\exception\ApiException;
 use plugin\sandadmin\basic\OpenController;
+use plugin\sandadmin\utils\InstallGuard;
+use plugin\sandadmin\utils\JwtSecretGuard;
 
 /**
  * 安装控制器
@@ -35,20 +37,27 @@ class InstallController extends OpenController
      */
     public function index()
     {
+        // 已安装（.env 或安装锁存在）一律 404，不进入任何安装逻辑。
+        if (InstallGuard::isInstalled()) {
+            return $this->notFound();
+        }
+        // 首次访问即确保令牌存在；仅首次创建时在服务器控制台输出，不进入页面。
+        InstallGuard::ensureToken();
+
         $data['app'] = $this->app;
         $data['version'] = config('plugin.sandadmin.app.version', $this->version);
 
-        $env = base_path() . DIRECTORY_SEPARATOR . '.env';
-
-        clearstatcache();
-        $data['installed'] = is_file($env);
-
-        if (!$data['installed'] && !is_writable(base_path() . DIRECTORY_SEPARATOR . 'config')) {
+        if (!is_writable(base_path() . DIRECTORY_SEPARATOR . 'config')) {
             $data['error'] = '权限认证失败';
             return view('install/error', $data);
         }
 
         return view('install/index', array_merge($data, $this->frontendEntrySettings()));
+    }
+
+    protected function notFound(): Response
+    {
+        return new Response(404, ['Content-Type' => 'text/plain; charset=utf-8'], 'Not Found');
     }
 
     /**
@@ -121,29 +130,64 @@ class InstallController extends OpenController
 
     /**
      * 执行安装
+     *
+     * 校验顺序固定：已安装锁定 → 安装令牌 → 参数 → 数据库。令牌通过前不访问数据库，
+     * 避免未授权方借安装接口探测内网数据库。
      */
     public function install(Request $request)
     {
-        $env = base_path() . DIRECTORY_SEPARATOR . '.env';
-
-        clearstatcache();
-        if (is_file($env)) {
-            return $this->fail('管理后台已经安装！如需重新安装，请删除根目录env配置文件并重启');
+        if (InstallGuard::isInstalled()) {
+            return $this->notFound();
+        }
+        if (!InstallGuard::verifyToken((string) $request->post('installToken', ''))) {
+            // 令牌文件被误删时重建并重新公告，操作者可据此重试。
+            InstallGuard::ensureToken();
+            return $this->fail('安装令牌缺失或无效。请在服务器控制台/日志中查找启动时输出的一次性安装令牌（也可读取服务器 runtime/install-token 文件）。');
+        }
+        try {
+            JwtSecretGuard::assertRuntimeConfig();
+        } catch (\RuntimeException $e) {
+            return $this->fail($e->getMessage());
         }
 
         $user = $request->post('username');
         $password = $request->post('password');
         $database = trim((string) $request->post('database'));
-        $host = $request->post('host');
+        $host = trim((string) $request->post('host'));
         $driver = 'pgsql';
         if ((string) $request->post('databaseType', 'pgsql') !== 'pgsql') {
             return $this->fail('SandAdmin 仅支持 PostgreSQL');
+        }
+        if ($host === '') {
+            return $this->fail('数据库主机不能为空');
         }
         if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $database)) {
             return $this->fail('数据库名只能包含字母、数字和下划线，且必须以字母或下划线开头');
         }
         $port = (int) $request->post('port') ?: 5432;
-        $dataType = $request->post('dataType', 'demo');
+        $dataType = (string) $request->post('dataType', 'pure');
+        if (!in_array($dataType, ['pure', 'demo'], true)) {
+            return $this->fail('数据类型只能是 pure（纯净数据）或 demo（演示数据）');
+        }
+
+        $adminUsername = trim((string) $request->post('adminUsername', ''));
+        if ($adminUsername === '') {
+            $adminUsername = InstallGuard::DEFAULT_ADMIN_USERNAME;
+        }
+        $adminPassword = (string) $request->post('adminPassword', '');
+        $adminError = InstallGuard::validateAdminCredentials(
+            $adminUsername,
+            $adminPassword,
+            (string) $request->post('adminPasswordConfirm', '')
+        );
+        if ($adminError !== null) {
+            return $this->fail($adminError);
+        }
+        $passwordGenerated = $adminPassword === '';
+        if ($passwordGenerated) {
+            $adminPassword = InstallGuard::generatePassword();
+        }
+        $mustChangePassword = InstallGuard::requiresPasswordChange($passwordGenerated, $adminPassword);
 
         try {
             $db = $this->getPdo($driver, $host, $user, $password, $port, $database);
@@ -179,6 +223,7 @@ class InstallController extends OpenController
             }
             $db->exec((string) file_get_contents($platformMenuSql));
             $this->installPgsqlOrmMetadata($db);
+            $this->provisionAdmin($db, $adminUsername, password_hash($adminPassword, PASSWORD_DEFAULT), $mustChangePassword);
             $db->commit();
         } catch (\Throwable $e) {
             if ($db->inTransaction()) {
@@ -224,20 +269,60 @@ class InstallController extends OpenController
         ]);
         file_put_contents(base_path() . DIRECTORY_SEPARATOR . '.env', $env_config);
 
-        // 尝试reload
+        $this->reloadWorkers();
+
+        // 安装锁与令牌清理放在 .env 写入之后：任一失败都不会留下可再次安装的状态。
+        InstallGuard::markInstalled();
+
+        return $this->success([
+            'initial_admin' => [
+                'username' => $adminUsername,
+                // 仅随机生成时回显一次；操作者自行填写的密码不回显。
+                'password' => $passwordGenerated ? $adminPassword : null,
+                'password_generated' => $passwordGenerated,
+                'must_change_password' => $mustChangePassword,
+                'notice' => $passwordGenerated
+                    ? '已生成随机密码且首次登录必须修改密码。该密码只显示这一次，请立即保存。'
+                    : ($mustChangePassword
+                        ? '所填写密码命中已知旧默认口令，首次登录后必须先修改密码。'
+                        : '请使用安装时填写的管理员密码登录。'),
+            ],
+        ], '安装成功');
+    }
+
+    /**
+     * 尝试让主进程重载 worker，使新写入的 .env 与配置生效。
+     */
+    protected function reloadWorkers(): void
+    {
         if (function_exists('posix_kill')) {
             set_error_handler(function () {});
             posix_kill(posix_getppid(), SIGUSR1);
             restore_error_handler();
         }
+    }
 
-        return $this->success([
-            'initial_admin' => [
-                'username' => 'admin',
-                'password' => '123456',
-                'notice' => '请在首次登录后立即修改默认密码。',
-            ],
-        ], '安装成功');
+    /**
+     * 写入初始管理员（种子中 id=1 的占位账号）：用户名、口令哈希、启用；$mustChangePassword
+     * 为真时要求首次登录改密（随机生成或命中旧默认口令时由调用方置真）。
+     * 其余种子账号的占位口令统一替换为随机哈希，且保持禁用。
+     */
+    protected function provisionAdmin(\PDO $db, string $username, string $passwordHash, bool $mustChangePassword): void
+    {
+        $statement = $db->prepare(
+            'UPDATE "sand_system_user" SET "username" = :username, "password" = :password, "status" = 1, "must_change_password" = :must_change WHERE "id" = 1'
+        );
+        $statement->execute(['username' => $username, 'password' => $passwordHash, 'must_change' => $mustChangePassword ? 1 : 0]);
+        if ($statement->rowCount() !== 1) {
+            throw new \RuntimeException('初始管理员账号种子数据缺失，安装已回滚');
+        }
+        $disabled = $db->prepare(
+            'UPDATE "sand_system_user" SET "password" = :password, "status" = 2 WHERE "id" <> 1 AND "password" = :placeholder'
+        );
+        $disabled->execute([
+            'password' => password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT),
+            'placeholder' => '!',
+        ]);
     }
 
     /**
@@ -280,6 +365,20 @@ class InstallController extends OpenController
     }
 
     /**
+     * 生成写入配置文件的"必填环境变量"PHP 表达式：变量缺失（或不允许为空时为空）即抛出明确错误。
+     * 自包含闭包，避免多个配置文件重复声明全局函数。
+     */
+    protected function requiredEnvExpression(string $name, bool $allowEmpty = false): string
+    {
+        $emptyCheck = $allowEmpty ? '' : " || \$value === ''";
+        $message = "缺少必需的环境变量 {$name}：请在宿主根目录 .env 中设置（由安装向导写入），不存在默认值。";
+
+        return "(static function (): string { \$value = env('{$name}'); "
+            . "if (!is_string(\$value){$emptyCheck}) { throw new \\RuntimeException('{$message}'); } "
+            . "return \$value; })()";
+    }
+
+    /**
      * 生成配置文件 
      */
     protected function generateConfig(string $driver): void
@@ -287,6 +386,9 @@ class InstallController extends OpenController
         $defaultPort = $driver === 'pgsql' ? 5432 : 3306;
         $charset = $this->getCharset($driver);
         $collation = $driver === 'pgsql' ? 'utf8' : 'utf8mb4_general_ci';
+        // 库名与密码没有默认值：缺失时加载配置即报明确错误，不静默回退到固定库名或弱口令。
+        $dbName = $this->requiredEnvExpression('DB_NAME');
+        $dbPassword = $this->requiredEnvExpression('DB_PASSWORD', true);
 
         // 1、think-orm配置文件
         $think_orm_config = <<<EOF
@@ -301,11 +403,11 @@ return [
             // 服务器地址
             'hostname' => env('DB_HOST', '127.0.0.1'),
             // 数据库名
-            'database' => env('DB_NAME', 'sandadmin'),
+            'database' => {$dbName},
             // 数据库用户名
             'username' => env('DB_USER', 'root'),
             // 数据库密码
-            'password' => env('DB_PASSWORD', '123456'),
+            'password' => {$dbPassword},
             // 数据库连接端口
             'hostport' => env('DB_PORT', $defaultPort),
             // 数据库连接参数
@@ -439,9 +541,9 @@ return [
             'driver' => env('DB_TYPE', '$driver'),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', $defaultPort),
-            'database' => env('DB_NAME', 'sandadmin'),
+            'database' => {$dbName},
             'username' => env('DB_USER', 'root'),
-            'password' => env('DB_PASSWORD', '123456'),
+            'password' => {$dbPassword},
             'charset' => env('DB_CHARSET', '$charset'),
             'collation' => env('DB_COLLATION', '$collation'),
             'prefix' => env('DB_PREFIX', ''),

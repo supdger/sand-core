@@ -35,6 +35,12 @@ class SystemMail extends BaseModel
     protected $table = 'sand_system_mail';
 
     /**
+     * 隐藏字段：邮箱验证码 code 不进入列表输出；覆盖基类须保留 delete_time。
+     * @var array
+     */
+    protected $hidden = ['code', 'delete_time'];
+
+    /**
      * 发送人搜索
      */
     public function searchFromAttr($query, $value)

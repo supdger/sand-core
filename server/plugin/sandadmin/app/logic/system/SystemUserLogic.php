@@ -14,6 +14,8 @@ use plugin\sandadmin\app\model\system\SystemRole;
 use plugin\sandadmin\app\model\system\SystemUser;
 use plugin\sandadmin\exception\ApiException;
 use plugin\sandadmin\basic\think\BaseLogic;
+use plugin\sandadmin\utils\ForcedPasswordChange;
+use plugin\sandadmin\utils\JwtSecretGuard;
 use Webman\Event\Event;
 use Tinywan\Jwt\JwtToken;
 
@@ -211,6 +213,12 @@ class SystemUserLogic extends BaseLogic
      */
     public function login(string $username, string $password, string $type): array
     {
+        // 签发令牌前先校验 JWT 密钥，占位符或过短密钥签出的令牌可被任何人伪造。
+        try {
+            JwtSecretGuard::assertRuntimeConfig();
+        } catch (\RuntimeException $e) {
+            throw new ApiException($e->getMessage(), 400);
+        }
         $adminInfo = $this->model->where('username', $username)->findOrEmpty();
         $status = 1;
         $message = '登录成功';
@@ -246,6 +254,8 @@ class SystemUserLogic extends BaseLogic
         // 登录事件
         $admin_id = $adminInfo->id;
         Event::emit('user.login', compact('username', 'status', 'message', 'admin_id'));
+        // 旧库没有该列时视为未置位；前端据此跳转强制改密页。
+        $token['must_change_password'] = (int) ($adminInfo->toArray()[ForcedPasswordChange::COLUMN] ?? 0) === 1;
         return $token;
     }
 
@@ -272,6 +282,14 @@ class SystemUserLogic extends BaseLogic
     {
         $model = $this->model->findOrEmpty($adminId);
         if (password_verify($oldPassword, $model->password)) {
+            $forced = (int) ($model->toArray()[ForcedPasswordChange::COLUMN] ?? 0) === 1;
+            if ($forced) {
+                $error = ForcedPasswordChange::validateNewPassword((string) $oldPassword, (string) $newPassword);
+                if ($error !== null) {
+                    throw new ApiException($error, 400);
+                }
+                $model->{ForcedPasswordChange::COLUMN} = 0;
+            }
             $model->password = password_hash($newPassword, PASSWORD_DEFAULT);
             return $model->save();
         } else {

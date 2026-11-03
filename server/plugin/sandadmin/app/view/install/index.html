@@ -782,7 +782,7 @@
                 <!-- Content Section -->
                 <div class="content-section">
                     <!-- Step 1: Database Config -->
-                    <div class="step-content {{ installed ? '' : 'active' }}" id="step1">
+                    <div class="step-content active" id="step1">
                         <h2 class="step-title">数据库配置</h2>
                         <form id="dbConfigForm">
                             <div class="row g-4">
@@ -797,15 +797,15 @@
                                         <label class="form-label">数据库数据</label>
                                         <div class="radio-group" style="display: flex; gap: 20px;">
                                             <label class="radio-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px 15px; border: 2px solid #F5F3FF; border-radius: 10px; background: #F8FAFC; transition: all 0.3s ease;">
-                                                <input type="radio" name="dataType" id="dataTypeDemo" value="demo" checked style="width: 18px; height: 18px; margin-right: 10px; accent-color: #7166f0;">
+                                                <input type="radio" name="dataType" id="dataTypeDemo" value="demo" style="width: 18px; height: 18px; margin-right: 10px; accent-color: #7166f0;">
                                                 <span style="display: flex; flex-direction: column;">
-                                                    <strong style="color: #1e293b; font-size: 14px;">附带演示数据</strong>
+                                                    <strong style="color: #1e293b; font-size: 14px;">附带演示数据（演示账号默认禁用）</strong>
                                                 </span>
                                             </label>
                                             <label class="radio-label" style="display: flex; align-items: center; cursor: pointer; padding: 10px 15px; border: 2px solid #F5F3FF; border-radius: 10px; background: #F8FAFC; transition: all 0.3s ease;">
-                                                <input type="radio" name="dataType" id="dataTypePure" value="pure" style="width: 18px; height: 18px; margin-right: 10px; accent-color: #7166f0;">
+                                                <input type="radio" name="dataType" id="dataTypePure" value="pure" checked style="width: 18px; height: 18px; margin-right: 10px; accent-color: #7166f0;">
                                                 <span style="display: flex; flex-direction: column;">
-                                                    <strong style="color: #1e293b; font-size: 14px;">纯净数据</strong>
+                                                    <strong style="color: #1e293b; font-size: 14px;">纯净数据（推荐）</strong>
                                                 </span>
                                             </label>
                                         </div>
@@ -866,6 +866,52 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label for="installToken" class="form-label">安装令牌</label>
+                                        <div class="custom-input-group">
+                                            <input type="password" class="form-control" id="installToken" autocomplete="off" spellcheck="false" required aria-describedby="installTokenHelp">
+                                            <div class="custom-input-icon">
+                                                <i class="fas fa-shield-alt"></i>
+                                            </div>
+                                        </div>
+                                        <small id="installTokenHelp" class="form-text">令牌由服务器在首次启动或首次打开本页时生成，只显示在运行 SandAdmin 服务的控制台/日志中（也保存在服务器 <code>runtime/install-token</code>，仅属主可读）。请复制其中一次性输出的 64 位令牌；安装成功后令牌自动失效。</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="adminUsername" class="form-label">管理员用户名</label>
+                                        <div class="custom-input-group">
+                                            <input type="text" class="form-control" id="adminUsername" value="admin" autocomplete="off" required>
+                                            <div class="custom-input-icon">
+                                                <i class="fas fa-user-shield"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="adminPassword" class="form-label">管理员密码（至少 12 位）</label>
+                                        <div class="custom-input-group">
+                                            <input type="password" class="form-control" id="adminPassword" autocomplete="new-password" placeholder="留空则自动生成强密码，仅显示一次">
+                                            <div class="custom-input-icon">
+                                                <i class="fas fa-lock"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="adminPasswordConfirm" class="form-label">确认管理员密码</label>
+                                        <div class="custom-input-group">
+                                            <input type="password" class="form-control" id="adminPasswordConfirm" autocomplete="new-password">
+                                            <div class="custom-input-icon">
+                                                <i class="fas fa-lock"></i>
+                                            </div>
+                                        </div>
+                                        <small class="form-text">自行填写时首次登录不强制改密；留空自动生成或命中旧默认口令时，首次登录必须先修改密码。</small>
+                                    </div>
+                                </div>
                             </div>
                             <div class="d-flex justify-content-end mt-4">
                                 <button type="button" class="btn btn-primary" onclick="nextStep(1)">
@@ -903,14 +949,12 @@
                             </div>
                             <h2 class="completed-title">安装成功</h2>
                             <p class="completed-subtitle">数据库配置已完成。接下来检查管理后台入口，无需重新安装。</p>
-                            {% if not installed %}
                             <div class="initial-admin-credentials" hidden aria-live="polite">
                                 <h3>首次登录凭据</h3>
                                 <p>用户名：<code id="initialAdminUsername"></code></p>
-                                <p>密码：<code id="initialAdminPassword"></code></p>
-                                <p class="credential-notice" id="initialAdminNotice">请在首次登录后立即修改默认密码。</p>
+                                <p id="initialAdminPasswordRow">密码：<code id="initialAdminPassword"></code></p>
+                                <p class="credential-notice" id="initialAdminNotice">请使用安装时设置的管理员凭据登录。</p>
                             </div>
-                            {% endif %}
                             <div class="entry-check" id="frontendEntry"
                                  data-frontend-port="{{frontendPort|e('html_attr')}}" data-frontend-base="{{frontendBase|e('html_attr')}}"
                                  data-frontend-url="{{frontendUrl|e('html_attr')}}" data-frontend-error="{{frontendError|e('html_attr')}}">
@@ -1051,10 +1095,21 @@ Stop-Process -Id ($listener.OwningProcess | Sort-Object -Unique) -Confirm</pre>
 
         // 验证数据库配置
         function validateDbConfig() {
-            const required = ['dbHost', 'dbName', 'dbUser', 'dbPassword'];
+            const required = ['installToken', 'dbHost', 'dbName', 'dbUser', 'dbPassword', 'adminUsername'];
             for (const field of required) {
                 if (!$(`#${field}`).val()) {
                     showNotification('error', '请填写所有必填字段');
+                    return false;
+                }
+            }
+            const adminPassword = $('#adminPassword').val();
+            if (adminPassword !== '') {
+                if (adminPassword.length < 12) {
+                    showNotification('error', '管理员密码至少 12 位；留空则自动生成');
+                    return false;
+                }
+                if (adminPassword !== $('#adminPasswordConfirm').val()) {
+                    showNotification('error', '两次输入的管理员密码不一致');
                     return false;
                 }
             }
@@ -1071,7 +1126,11 @@ Stop-Process -Id ($listener.OwningProcess | Sort-Object -Unique) -Confirm</pre>
                 username: $('#dbUser').val(),
                 password: $('#dbPassword').val(),
                 prefix: $('#dbPrefix').val(),
-                dataType: $('input[name="dataType"]:checked').val()
+                dataType: $('input[name="dataType"]:checked').val(),
+                installToken: $('#installToken').val(),
+                adminUsername: $('#adminUsername').val(),
+                adminPassword: $('#adminPassword').val(),
+                adminPasswordConfirm: $('#adminPasswordConfirm').val()
             };
 
             // 模拟安装过程
@@ -1138,8 +1197,9 @@ Stop-Process -Id ($listener.OwningProcess | Sort-Object -Unique) -Confirm</pre>
                         if (initialAdmin) {
                             $('.initial-admin-credentials').prop('hidden', false);
                             $('#initialAdminUsername').text(initialAdmin.username || '');
+                            $('#initialAdminPasswordRow').prop('hidden', !initialAdmin.password_generated);
                             $('#initialAdminPassword').text(initialAdmin.password || '');
-                            $('#initialAdminNotice').text(initialAdmin.notice || '请在首次登录后立即修改默认密码。');
+                            $('#initialAdminNotice').text(initialAdmin.notice || '请使用安装时设置的管理员凭据登录。');
                         }
 
                         // 隐藏当前步骤，显示下一步
@@ -1168,9 +1228,6 @@ Stop-Process -Id ($listener.OwningProcess | Sort-Object -Unique) -Confirm</pre>
            
         }
 
-        {% if installed %}
-        nextStep(2);
-        {% endif %}
     </script>
 </body>
 </html>
