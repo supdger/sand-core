@@ -1,0 +1,244 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use plugin\sandadmin\service\DatabaseInstaller;
+use plugin\sandadmin\service\InstallOptions;
+use plugin\sandadmin\service\RouteManifest;
+use plugin\sandadmin\utils\InstallGuard;
+
+/**
+ * sand-core 安装命令。不启动 Webman，不注册 HTTP 路由。
+ *
+ * 用法见 --help。密码只从环境变量读取，禁止放在参数里。
+ */
+
+$pluginRoot = dirname(__DIR__);
+require $pluginRoot . '/utils/InstallGuard.php';
+require $pluginRoot . '/utils/JwtSecretGuard.php';
+require $pluginRoot . '/service/RouteManifest.php';
+require $pluginRoot . '/service/DatabaseInstaller.php';
+
+$argv = $_SERVER['argv'] ?? [];
+$command = $argv[1] ?? 'help';
+if (in_array($command, ['-h', '--help', 'help'], true)) {
+    sand_help();
+    exit(0);
+}
+
+try {
+    $options = sand_options(array_slice($argv, 2));
+} catch (InvalidArgumentException $error) {
+    fwrite(STDERR, $error->getMessage() . PHP_EOL);
+    exit(1);
+}
+
+if (isset($options['help'])) {
+    sand_help();
+    exit(0);
+}
+
+try {
+    if ($command === 'build') {
+        sand_build($pluginRoot, $options);
+        exit(0);
+    }
+    if ($command === 'install') {
+        sand_install($pluginRoot, $options);
+        exit(0);
+    }
+    if ($command === 'migrate') {
+        sand_migrate($pluginRoot, $options);
+        exit(0);
+    }
+} catch (Throwable $error) {
+    fwrite(STDERR, $error->getMessage() . PHP_EOL);
+    exit(1);
+}
+
+fwrite(STDERR, "未知命令：{$command}\n");
+sand_help();
+exit(1);
+
+function sand_help(): void
+{
+    $help = <<<'TXT'
+sand-core 命令（不提供 HTTP 安装）：
+
+  bin/sand install --confirm=INSTALL --host=主机 --port=5432 --database=库名 --user=用户 --data=pure|demo [--admin-user=admin] [--force] [--allow-empty-password=local] [--base=宿主目录]
+  bin/sand migrate [--base=宿主目录]
+  bin/sand build --production --out=目录
+
+安装与迁移只走上述命令。生产构建不会注册 /install*；删除 .env 也不会恢复 HTTP 安装。
+
+非交互参数都要写在命令行。密码不要写成参数：
+  SAND_DB_PASSWORD       数据库密码（install 必填；空密码仅允许本机回环且显式 --allow-empty-password=local）
+  SAND_ADMIN_PASSWORD    初始管理员密码（至少 12 位）。留空则生成一次并只打印到当前终端。
+
+交互：在终端里省略 --host 等项时会逐项询问。密码仍只读环境变量。
+--force 仅用于已有 .env 或 runtime/install.lock 时的 CLI 重装，且目标库必须还没有 SandAdmin 表。
+migrate 按文件名顺序应用 db/update-*.pgsql，并记入 sand_schema_migration。本包没有 doctrine/migrations。
+
+TXT;
+    fwrite(STDOUT, $help);
+}
+
+/**
+ * @param list<string> $args
+ * @return array<string, string>
+ */
+function sand_options(array $args): array
+{
+    $options = [];
+    foreach ($args as $arg) {
+        if ($arg === '--help' || $arg === '-h') {
+            $options['help'] = '1';
+            continue;
+        }
+        if ($arg === '--force') {
+            $options['force'] = '1';
+            continue;
+        }
+        if ($arg === '--production') {
+            $options['production'] = '1';
+            continue;
+        }
+        if (preg_match('/^--([a-z0-9-]+)=(.*)$/D', $arg, $match) !== 1) {
+            throw new InvalidArgumentException('无法识别的参数：' . $arg);
+        }
+        if (in_array($match[1], ['password', 'db-password', 'admin-password'], true)) {
+            throw new InvalidArgumentException('密码不能出现在命令行参数中');
+        }
+        if (isset($options[$match[1]])) {
+            throw new InvalidArgumentException('参数重复：' . $match[1]);
+        }
+        $options[$match[1]] = $match[2];
+    }
+
+    return $options;
+}
+
+/**
+ * @param array<string, string> $options
+ */
+function sand_build(string $pluginRoot, array $options): void
+{
+    if (($options['production'] ?? '') !== '1') {
+        throw new RuntimeException('用法：bin/sand build --production --out=目录');
+    }
+    $out = $options['out'] ?? '';
+    if ($out === '') {
+        throw new RuntimeException('生产构建必须指定 --out=目录');
+    }
+    $path = RouteManifest::write($pluginRoot . '/config/route.php', $out);
+    fwrite(STDOUT, "生产路由清单已写入 {$path}\n");
+    fwrite(STDOUT, "env_consulted=0\ninstall_routes=0\n");
+}
+
+/**
+ * @param array<string, string> $options
+ */
+function sand_install(string $pluginRoot, array $options): void
+{
+    $base = sand_host_base($options);
+    if (stream_isatty(STDIN)) {
+        $options['host'] ??= sand_prompt('数据库主机', '127.0.0.1');
+        $options['port'] ??= sand_prompt('数据库端口', '5432');
+        $options['database'] ??= sand_prompt('数据库名');
+        $options['user'] ??= sand_prompt('数据库用户');
+        $options['data'] ??= sand_prompt('数据类型 pure 或 demo', 'pure');
+        $options['admin-user'] ??= sand_prompt('管理员用户名', InstallGuard::DEFAULT_ADMIN_USERNAME);
+        $options['confirm'] ??= sand_prompt('确认安装，请输入 ' . DatabaseInstaller::CONFIRM);
+    }
+    foreach (['host', 'port', 'database', 'user', 'confirm'] as $name) {
+        if (!isset($options[$name]) || $options[$name] === '') {
+            throw new RuntimeException('缺少 --' . $name . '。执行 bin/sand install --help 查看参数。');
+        }
+    }
+    if (preg_match('/^[1-9][0-9]{0,4}$/D', $options['port']) !== 1 || (int) $options['port'] > 65535) {
+        throw new RuntimeException('数据库端口无效');
+    }
+    $dbPassword = getenv('SAND_DB_PASSWORD');
+    if ($dbPassword === false) {
+        throw new RuntimeException('请设置环境变量 SAND_DB_PASSWORD。不要把数据库密码写进命令行参数。');
+    }
+    $adminPassword = getenv('SAND_ADMIN_PASSWORD');
+    $installer = new DatabaseInstaller($pluginRoot);
+    $result = $installer->install($base, new InstallOptions(
+        host: $options['host'],
+        port: (int) $options['port'],
+        database: $options['database'],
+        user: $options['user'],
+        password: $dbPassword,
+        dataType: $options['data'] ?? 'pure',
+        adminUsername: $options['admin-user'] ?? InstallGuard::DEFAULT_ADMIN_USERNAME,
+        adminPassword: $adminPassword === false ? '' : $adminPassword,
+        force: ($options['force'] ?? '') === '1',
+        confirm: $options['confirm'],
+        allowEmptyPassword: ($options['allow-empty-password'] ?? '') === 'local',
+    ));
+    fwrite(STDOUT, "安装完成。管理员用户名：{$result->username}\n");
+    if ($result->generatedPassword !== null) {
+        fwrite(STDOUT, "初始管理员密码（只显示这一次，未写入日志）：{$result->generatedPassword}\n");
+    }
+    fwrite(STDOUT, $result->mustChangePassword
+        ? "首次登录必须修改该密码。\n"
+        : "请使用安装时设置的管理员密码登录。\n");
+    fwrite(STDOUT, "请重启 Webman 进程以加载新的 .env。HTTP 没有安装或重装入口。\n");
+}
+
+/**
+ * @param array<string, string> $options
+ */
+function sand_migrate(string $pluginRoot, array $options): void
+{
+    $base = sand_host_base($options);
+    $applied = (new DatabaseInstaller($pluginRoot))->migrate($base);
+    fwrite(STDOUT, "迁移完成，新应用 {$applied} 个 SQL 文件。\n");
+}
+
+/**
+ * @param array<string, string> $options
+ */
+function sand_host_base(array $options): string
+{
+    if (isset($options['base']) && $options['base'] !== '') {
+        $base = realpath($options['base']);
+        if ($base === false || !is_dir($base)) {
+            throw new RuntimeException('找不到 --base 目录');
+        }
+
+        return $base;
+    }
+    $cwd = getcwd();
+    if (is_string($cwd) && is_file($cwd . '/plugin/sandadmin/config/route.php')) {
+        $resolved = realpath($cwd);
+        if ($resolved !== false) {
+            return $resolved;
+        }
+    }
+    $scriptBase = dirname(__DIR__, 3);
+    $insideVendor = str_contains(str_replace('\\', '/', __DIR__), '/vendor/');
+    if (!$insideVendor && is_file($scriptBase . '/plugin/sandadmin/config/route.php')) {
+        $resolved = realpath($scriptBase);
+        if ($resolved !== false) {
+            return $resolved;
+        }
+    }
+
+    throw new RuntimeException('无法定位宿主目录。请在含 plugin/sandadmin 的 Webman 根目录执行，或传入 --base=');
+}
+
+function sand_prompt(string $label, string $default = ''): string
+{
+    $suffix = $default === '' ? '' : " [{$default}]";
+    fwrite(STDERR, $label . $suffix . '：');
+    $line = fgets(STDIN);
+    if ($line === false) {
+        throw new RuntimeException('输入已取消');
+    }
+    $line = trim($line);
+
+    return $line === '' ? $default : $line;
+}

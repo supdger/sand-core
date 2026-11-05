@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace plugin\sandadmin\app\bootstrap;
 
-use plugin\sandadmin\utils\InstallGuard;
 use plugin\sandadmin\utils\JwtSecretGuard;
 use Throwable;
 
 /**
- * 进程启动自检：JWT 密钥不安全时拒绝启动（worker 内同时停止主进程，避免重启风暴）；未安装时准备一次性安装令牌。
+ * 进程启动自检：JWT 密钥不安全时拒绝启动（worker 内同时停止主进程，避免重启风暴）。
+ *
+ * 不创建安装令牌，也不在 worker 内改写“已安装”标志。数据库安装只由 CLI 完成，
+ * 路由表在进程生命周期内保持源码里的那一份（没有 HTTP 安装路由）。
  *
  * 由 config/bootstrap.php 注册，Webman 在每个 worker 启动时调用 start()。
  */
@@ -31,9 +33,6 @@ final class SecurityBootstrap
                 ($halt ?? self::haltMaster(...))($worker);
             }
             throw $error;
-        }
-        if (!InstallGuard::isInstalled()) {
-            InstallGuard::ensureToken();
         }
     }
 
