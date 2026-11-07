@@ -38,7 +38,7 @@
   import { ElMessageBox } from 'element-plus'
   import { useCommon } from '@/hooks/core/useCommon'
   import { getRouteInitFailed, resetRouteInitState } from '@/router/guards/beforeEach'
-  import { resetLocalState } from '@/utils/sys/error-handle'
+  import { guardedReload, resetLocalState } from '@/utils/sys/error-handle'
 
   const router = useRouter()
 
@@ -79,8 +79,9 @@
   const retryInit = () => {
     resetRouteInitState()
     routeInitRetryable.value = false
-    // 整页重载是最彻底的重试：bootstrap、store、路由注册全部重新来过
-    window.location.reload()
+    // 整页重载是最彻底的重试：bootstrap、store、路由注册全部重新来过；
+    // 走有界重载，防止初始化持续失败时无限 reload
+    guardedReload()
   }
 
   const backLogin = () => {
@@ -100,6 +101,6 @@
       return
     }
     resetLocalState()
-    window.location.reload()
+    guardedReload()
   }
 </script>
