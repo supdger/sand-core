@@ -9,10 +9,17 @@ declare(strict_types=1);
  *
  * Covers the GET /core/config/index hardening contract:
  *   1. Read side: sensitive config keys (cloud storage secrets, SMTP password,
- *      etc.) are masked to '******' in list output, with value_masked /
- *      value_configured flags; both paginated and saiType=all flat structures.
+ *      s3_key, SMTP Username, etc.) are masked to '******' in list output, with
+ *      value_masked / value_configured flags; both paginated and saiType=all
+ *      flat structures. The same config-key scope masks soft-deleted
+ *      sand_system_config rows in the recycle bin.
  *   2. Write side: the '******' placeholder means "keep existing value" and
  *      must never be persisted; empty string '' stays a real "clear value".
+ *   3. Log side: maskParams masks {key,value} config pairs (batchUpdate
+ *      config[].value, save/update top-level key/value) so oper/exception
+ *      logs never persist newly entered secrets; the widened config-key scope
+ *      (username, *_key) stays confined to config paths and does not leak
+ *      into the global request-param/column criteria.
  *
  * Only depends on utils/SensitiveData.php (no ThinkPHP/Db imports), so this
  * script runs standalone without composer install.
@@ -153,6 +160,134 @@ namespace {
     ]);
     $assert($nested[0]['config_select_data'] === ['foo' => 'bar'],
         'nested non-config arrays inside a row are not mutated');
+
+    // ------------------------------------------------------------------
+    // 6. Config-key scope: storage/mail credential keys (s3_key, Username,
+    //    *_key, username 形态) are masked only on config paths.
+    // ------------------------------------------------------------------
+    foreach (['s3_key', 'Username', 'smtp_username', 'user_name', 'api_key', 'app_key', 'access_key', 'public_key', 'key', 'Password', 's3_secret', 'oss_accessKeyId', 'qiniu_secretKey', 'cos_secretId'] as $ck) {
+        $assert(SensitiveData::isSensitiveConfigKey($ck) === true, "isSensitiveConfigKey('{$ck}') === true");
+    }
+    foreach (['site_name', 's3_bucket', 's3_domain', 's3_region', 's3_endpoint', 'FromName', 'Host', 'Port', 'CharSet', 'upload_size', 'local_root', 'user', 'monkey', ''] as $ck) {
+        $assert(SensitiveData::isSensitiveConfigKey($ck) === false, "isSensitiveConfigKey('{$ck}') === false");
+    }
+
+    // Global criteria must NOT widen: keys newly covered only by the config
+    // scope (s3_key, Username, app_key, public_key ...) stay non-sensitive for
+    // plain request params and table columns outside config paths.
+    // (api_key/access_key/private_key already hit global apikey/accesskey/
+    // privatekey fragments — pre-existing, asserted for regression.)
+    foreach (['s3_key', 'Username', 'app_key', 'public_key', 'encryption_key', 'username'] as $gk) {
+        $assert(SensitiveData::isSensitiveKey($gk) === false, "isSensitiveKey('{$gk}') stays false (global scope unchanged)");
+    }
+    foreach (['api_key', 'access_key', 'private_key'] as $gk) {
+        $assert(SensitiveData::isSensitiveKey($gk) === true, "isSensitiveKey('{$gk}') already true via global fragments");
+    }
+    $assert(SensitiveData::isSensitiveColumn('username') === false, "isSensitiveColumn('username') stays false (columns unaffected)");
+
+    // maskConfigRows picks up the widened config-key scope (list + recycle bin share it).
+    $widened = SensitiveData::maskConfigRows([
+        ['id' => 30, 'key' => 's3_key', 'value' => 'AKIA-FAKE-EXAMPLE', 'name' => 'S3 key'],
+        ['id' => 31, 'key' => 'Username', 'value' => 'smtp-user@example.com', 'name' => 'SMTP用户名'],
+        ['id' => 32, 'key' => 's3_bucket', 'value' => 'my-bucket', 'name' => 'S3 bucket'],
+        ['id' => 33, 'key' => 'FromName', 'value' => '账户注册', 'name' => '发件名称'],
+        ['id' => 34, 'key' => 'Username', 'value' => '', 'name' => 'SMTP用户名(空)'],
+    ]);
+    $assert($widened[0]['value'] === SensitiveData::MASK && $widened[0]['value_masked'] === true,
+        'config row s3_key masked');
+    $assert($widened[1]['value'] === SensitiveData::MASK && $widened[1]['value_masked'] === true,
+        'config row Username masked');
+    $assert($widened[2]['value'] === 'my-bucket' && $widened[2]['value_masked'] === false,
+        'config row s3_bucket keeps plaintext');
+    $assert($widened[3]['value'] === '账户注册' && $widened[3]['value_masked'] === false,
+        'config row FromName keeps plaintext');
+    $assert($widened[4]['value'] === '' && $widened[4]['value_masked'] === false && $widened[4]['value_configured'] === false,
+        'empty Username value not masked, configured=false');
+
+    // Recycle-bin shaped page (paginate()->toArray() with data[]) uses the same scope.
+    $recyclePage = [
+        'total' => 2,
+        'per_page' => 10,
+        'current_page' => 1,
+        'last_page' => 1,
+        'data' => [
+            ['id' => 40, 'key' => 's3_secret', 'value' => 'deleted-s3-secret', 'delete_time' => '2026-01-02 00:00:00'],
+            ['id' => 41, 'key' => 'site_name', 'value' => 'SandAdmin', 'delete_time' => '2026-01-02 00:00:00'],
+        ],
+    ];
+    $maskedRecycle = SensitiveData::maskConfigRows($recyclePage);
+    $assert($maskedRecycle['data'][0]['value'] === SensitiveData::MASK
+        && $maskedRecycle['data'][0]['value_masked'] === true,
+        'recycle-bin config row s3_secret masked inside data[]');
+    $assert($maskedRecycle['data'][1]['value'] === 'SandAdmin'
+        && $maskedRecycle['data'][1]['value_masked'] === false,
+        'recycle-bin non-sensitive row keeps plaintext inside data[]');
+    $assert($maskedRecycle['data'][0]['delete_time'] === '2026-01-02 00:00:00',
+        'recycle-bin non-value columns preserved');
+
+    // ------------------------------------------------------------------
+    // 7. Log side: maskParams masks {key,value} config pairs so oper log
+    //    request_data and exception-log request_param never persist secrets.
+    // ------------------------------------------------------------------
+    // batchUpdate shape: secrets nested under config[].value.
+    $batchParams = [
+        'group_id' => 2,
+        'config' => [
+            ['id' => 1, 'name' => 'S3 key', 'key' => 's3_key', 'value' => 'AKIA-FAKE-EXAMPLE'],
+            ['id' => 2, 'name' => '站点名称', 'key' => 'site_name', 'value' => 'SandAdmin'],
+            ['id' => 3, 'name' => 'SMTP用户名', 'key' => 'Username', 'value' => 'smtp-user@example.com'],
+            ['id' => 4, 'name' => 'SMTP密码', 'key' => 'Password', 'value' => 'smtp-pass-fake'],
+            ['id' => 5, 'name' => 'S3密钥', 'key' => 's3_secret', 'value' => SensitiveData::MASK],
+        ],
+    ];
+    $maskedBatch = SensitiveData::maskParams($batchParams);
+    $assert($maskedBatch['group_id'] === 2, 'batchUpdate group_id preserved');
+    $assert($maskedBatch['config'][0]['value'] === SensitiveData::MASK
+        && $maskedBatch['config'][0]['key'] === 's3_key',
+        'batchUpdate config[0] s3_key value masked, key name preserved');
+    $assert($maskedBatch['config'][1]['value'] === 'SandAdmin',
+        'batchUpdate config[1] non-sensitive site_name value kept');
+    $assert($maskedBatch['config'][2]['value'] === SensitiveData::MASK
+        && $maskedBatch['config'][2]['key'] === 'Username',
+        'batchUpdate config[2] Username value masked');
+    $assert($maskedBatch['config'][3]['value'] === SensitiveData::MASK,
+        'batchUpdate config[3] Password value masked');
+    $assert($maskedBatch['config'][4]['value'] === SensitiveData::MASK,
+        'batchUpdate config[4] placeholder ****** stays ******');
+
+    // save/update single-config shape: top-level key/value pair.
+    $single = SensitiveData::maskParams([
+        'id' => 7, 'group_id' => 3, 'name' => 'SMTP密码', 'key' => 'Password',
+        'value' => 'smtp-pass-fake', 'input_type' => 'input',
+    ]);
+    $assert($single['value'] === SensitiveData::MASK && $single['key'] === 'Password' && $single['name'] === 'SMTP密码',
+        'single config save/update params masked, other fields preserved');
+
+    // Non-sensitive {key,value} pairs and partial pairs are untouched.
+    $plainPair = SensitiveData::maskParams(['key' => 'site_name', 'value' => 'SandAdmin']);
+    $assert($plainPair['value'] === 'SandAdmin', 'non-sensitive {key,value} pair value kept');
+    $noValue = SensitiveData::maskParams(['key' => 's3_key', 'name' => 'x']);
+    $assert($noValue['key'] === 's3_key' && !array_key_exists('value', $noValue),
+        'pair without value field untouched');
+    $keyNotScalar = SensitiveData::maskParams(['key' => ['nested' => 's3_key'], 'value' => 'v']);
+    $assert($keyNotScalar['value'] === 'v', 'non-scalar key field does not trigger pair masking');
+
+    // Deep nesting still reaches config pairs.
+    $deep = SensitiveData::maskParams(['a' => ['b' => ['config' => [
+        ['key' => 'api_key', 'value' => 'fake-api-key'],
+    ]]]]);
+    $assert($deep['a']['b']['config'][0]['value'] === SensitiveData::MASK,
+        'deeply nested config pair masked');
+
+    // Global key-name masking unchanged; plain username param NOT masked.
+    $regress = SensitiveData::maskParams([
+        'password' => 'p', 'username' => 'admin', 'token' => 't',
+        'page' => ['key' => 's3_key'],
+    ]);
+    $assert($regress['password'] === SensitiveData::MASK && $regress['token'] === SensitiveData::MASK,
+        'key-name masking (password/token) unchanged');
+    $assert($regress['username'] === 'admin', 'plain username param not masked (no global widening)');
+    $assert($regress['page']['key'] === 's3_key', 'bare key field without value sibling kept');
 
     echo "ALL SECRET-EXPOSURE ASSERTIONS PASSED\n";
 }
