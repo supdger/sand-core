@@ -8,7 +8,7 @@
           data.btnText
         }}</ElButton>
         <ElButton
-          v-if="routeInitRetryable"
+          v-if="routeInitRetryable && !hideAuxActions"
           type="warning"
           size="large"
           @click="retryInit"
@@ -26,7 +26,7 @@
           </template>
           重新登录
         </ElButton>
-        <div class="mt-4">
+        <div v-if="!hideAuxActions" class="mt-4">
           <ElButton link type="info" size="small" @click="resetLocal">重置本地状态</ElButton>
         </div>
       </div>
@@ -56,8 +56,10 @@
   withDefaults(
     defineProps<{
       data: ExceptionData
+      /** 隐藏重试/重置本地状态等辅助操作；403 无权限页只保留返回首页与重新登录 */
+      hideAuxActions?: boolean
     }>(),
-    {}
+    { hideAuxActions: false }
   )
 
   const { homePath } = useCommon()
