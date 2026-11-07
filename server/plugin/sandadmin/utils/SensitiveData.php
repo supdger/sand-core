@@ -122,4 +122,70 @@ final class SensitiveData
         }
         return $rows;
     }
+
+    /**
+     * 写入侧占位符识别：列表打码回显值 '******' 回传时表示"保持原值"。
+     * 仅与 MASK 严格相等才算占位符；真实密码、空串、null、非字符串一律不算。
+     */
+    public static function isMaskedPlaceholder(mixed $value): bool
+    {
+        return $value === self::MASK;
+    }
+
+    /**
+     * 写入侧值解析：占位符回写为 $existing ?? ''（查无记录或库存为空时置空串），其余原样返回。
+     * 注意：空串 '' 是真实写入值（清空配置），与占位符语义不同，不做特殊处理。
+     */
+    public static function resolveWriteValue(mixed $incoming, mixed $existing): mixed
+    {
+        return self::isMaskedPlaceholder($incoming) ? ($existing ?? '') : $incoming;
+    }
+
+    /**
+     * 配置列表出参打码：敏感 key 且库存 value 非空（非 null 且非 ''）的行，
+     * value 替换为 MASK，并补 value_masked / value_configured 两个布尔字段。
+     * 兼容 paginate()->toArray()（含 data 行集）与 saiType=all 平铺行集两种结构。
+     * 仅用于 HTTP 出参；内部读取（getData/getGroup/ConfigCache）不得调用，须保持明文。
+     *
+     * @param array<int|string, mixed> $result
+     * @return array<int|string, mixed>
+     */
+    public static function maskConfigRows(array $result): array
+    {
+        if (isset($result['data']) && is_array($result['data'])) {
+            $result['data'] = self::maskConfigRows($result['data']);
+            return $result;
+        }
+        foreach ($result as $index => $row) {
+            if (is_array($row)) {
+                $result[$index] = self::maskConfigRow($row);
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * 单行配置打码：非配置形态的数组（无 key/value 字段）原样返回，避免误伤嵌套结构。
+     *
+     * @param array<int|string, mixed> $row
+     * @return array<int|string, mixed>
+     */
+    private static function maskConfigRow(array $row): array
+    {
+        if (!array_key_exists('key', $row) && !array_key_exists('value', $row)) {
+            return $row;
+        }
+        $rawKey = $row['key'] ?? null;
+        $value = $row['value'] ?? null;
+        $configured = $value !== null && $value !== '';
+        $masked = $configured
+            && (is_string($rawKey) || is_int($rawKey))
+            && self::isSensitiveKey($rawKey);
+        if ($masked) {
+            $row['value'] = self::MASK;
+        }
+        $row['value_masked'] = $masked;
+        $row['value_configured'] = $configured;
+        return $row;
+    }
 }
