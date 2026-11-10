@@ -20,7 +20,7 @@
           </template>
           重试
         </ElButton>
-        <ElButton type="danger" size="large" @click="backLogin" v-ripple class="mt-5">
+        <ElButton type="default" size="large" @click="backLogin" v-ripple class="mt-5">
           <template #icon>
             <ArtSvgIcon icon="ri:login-box-line" />
           </template>
