@@ -7,6 +7,7 @@
       btnText: $t('exceptionPage.gohome'),
       imgUrl
     }"
+    hide-aux-actions
   />
 </template>
 

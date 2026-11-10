@@ -51,7 +51,7 @@ class CheckAuth implements MiddlewareInterface
             $auth = UserAuthCache::getUserAuth($token['id']);
 
             if (!$this->checkPermissions($permissions, $auth)) {
-                throw new SystemException('权限不足，无法访问或操作');
+                throw new SystemException('权限不足，无法访问或操作', 403, null, 403);
             }
         }
 

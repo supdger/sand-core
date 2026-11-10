@@ -227,7 +227,13 @@ SQL;
                 ->order('delete_time', 'desc')
                 ->paginate($limit)
                 ->toArray();
-            return SensitiveData::stripSensitiveColumns($page);
+            $page = SensitiveData::stripSensitiveColumns($page);
+            // sand_system_config 的凭据存于 key/value 行形态，列名口径剔除不到，
+            // 仅对该表再按配置键名口径打码；其他表不受影响，写路径（恢复/删除）不经过此处。
+            if ($table === 'sand_system_config') {
+                $page = SensitiveData::maskConfigRows($page);
+            }
+            return $page;
         } else {
             return [];
         }

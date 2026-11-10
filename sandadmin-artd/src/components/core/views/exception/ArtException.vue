@@ -8,7 +8,7 @@
           data.btnText
         }}</ElButton>
         <ElButton
-          v-if="routeInitRetryable"
+          v-if="routeInitRetryable && !hideAuxActions"
           type="warning"
           size="large"
           @click="retryInit"
@@ -26,7 +26,7 @@
           </template>
           重新登录
         </ElButton>
-        <div class="mt-4">
+        <div v-if="!hideAuxActions" class="mt-4">
           <ElButton link type="info" size="small" @click="resetLocal">重置本地状态</ElButton>
         </div>
       </div>
@@ -38,7 +38,7 @@
   import { ElMessageBox } from 'element-plus'
   import { useCommon } from '@/hooks/core/useCommon'
   import { getRouteInitFailed, resetRouteInitState } from '@/router/guards/beforeEach'
-  import { resetLocalState } from '@/utils/sys/error-handle'
+  import { guardedReload, resetLocalState } from '@/utils/sys/error-handle'
 
   const router = useRouter()
 
@@ -56,8 +56,10 @@
   withDefaults(
     defineProps<{
       data: ExceptionData
+      /** 隐藏重试/重置本地状态等辅助操作；403 无权限页只保留返回首页与重新登录 */
+      hideAuxActions?: boolean
     }>(),
-    {}
+    { hideAuxActions: false }
   )
 
   const { homePath } = useCommon()
@@ -79,8 +81,9 @@
   const retryInit = () => {
     resetRouteInitState()
     routeInitRetryable.value = false
-    // 整页重载是最彻底的重试：bootstrap、store、路由注册全部重新来过
-    window.location.reload()
+    // 整页重载是最彻底的重试：bootstrap、store、路由注册全部重新来过；
+    // 走有界重载，防止初始化持续失败时无限 reload
+    guardedReload()
   }
 
   const backLogin = () => {
@@ -100,6 +103,6 @@
       return
     }
     resetLocalState()
-    window.location.reload()
+    guardedReload()
   }
 </script>
