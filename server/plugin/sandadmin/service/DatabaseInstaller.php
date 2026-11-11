@@ -266,7 +266,12 @@ final class DatabaseInstaller
 
     private function writeEnv(string $base, InstallOptions $options): void
     {
-        $body = $this->renderEnv([
+        $envPath = InstallGuard::envPath($base);
+        // 已有 .env 中的用户配置值一律保留，仅缺失项写默认：服务端口是部署者
+        // 常改项，--force 重装也不能回写为默认 8787/2206；安装器不管理的键
+        // 原样并入，防止重写时丢掉运维自定义配置。
+        $existingEnv = $this->readEnvAssignments($envPath);
+        $body = $this->renderEnvKeepExisting([
             '# 数据库配置',
             'DB_TYPE' => 'pgsql',
             'DB_HOST' => $options->host,
@@ -293,22 +298,81 @@ final class DatabaseInstaller
             'FRONTEND_DIR' => 'sandadmin-artd',
             '',
             '# 服务端口（默认值可按项目环境调整）',
-            'SANDADMIN_SERVER_PORT' => '8787',
-            'SANDADMIN_CHANNEL_PORT' => '2206',
-        ]);
-        $path = InstallGuard::envPath($base);
+            'SANDADMIN_SERVER_PORT' => $existingEnv['SANDADMIN_SERVER_PORT'] ?? '8787',
+            'SANDADMIN_CHANNEL_PORT' => $existingEnv['SANDADMIN_CHANNEL_PORT'] ?? '2206',
+        ], $existingEnv);
         $temporary = tempnam($base, '.sandadmin-env-');
         if ($temporary === false) {
             throw new RuntimeException('无法创建临时配置');
         }
         $written = file_put_contents($temporary, $body);
-        $moved = $written === strlen($body) && chmod($temporary, 0600) && rename($temporary, $path);
+        $moved = $written === strlen($body) && chmod($temporary, 0600) && rename($temporary, $envPath);
         if (is_file($temporary)) {
             unlink($temporary);
         }
         if (!$moved) {
             throw new RuntimeException('数据库已初始化，但 .env 写入失败。请不要对同一库重复执行安装。若管理员密码是自动生成的且终端里还没有看到它，请在数据库中重置 id=1 的密码。');
         }
+    }
+
+    /**
+     * 渲染安装器管理的 .env 条目，并原样并入既有文件中安装器不管理的键，
+     * 保证已有用户配置（含自定义服务端口）不被回写覆盖。
+     *
+     * @param array<int|string,string> $entries 安装器条目（整数键为注释/空行）
+     * @param array<string,string> $existing 既有 .env 键值
+     */
+    private function renderEnvKeepExisting(array $entries, array $existing): string
+    {
+        $managed = [];
+        foreach ($entries as $key => $value) {
+            if (!is_int($key)) {
+                $managed[$key] = true;
+            }
+        }
+        $content = $this->renderEnv($entries);
+        $preserved = [];
+        foreach ($existing as $existingKey => $existingValue) {
+            if (!isset($managed[$existingKey])) {
+                $preserved[$existingKey] = $existingValue;
+            }
+        }
+        if ($preserved !== []) {
+            $content .= PHP_EOL . '# 已有用户配置（安装器未管理的键，原样保留）' . PHP_EOL
+                . $this->renderEnv($preserved);
+        }
+
+        return $content;
+    }
+
+    /**
+     * 读取既有 .env 的键值（不存在时返回空表）。仅解析 `KEY = value` 形式的
+     * 赋值行，单双引号按 phpdotenv 语义去壳；注释、export 前缀与非赋值行忽略。
+     *
+     * @return array<string,string>
+     */
+    private function readEnvAssignments(string $envPath): array
+    {
+        if (!is_file($envPath)) {
+            return [];
+        }
+        $values = [];
+        foreach (file($envPath, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            if (preg_match('/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/', $line, $match) !== 1) {
+                continue;
+            }
+            $raw = trim((string) $match[2]);
+            if (strlen($raw) >= 2 && $raw[0] === '"' && str_ends_with($raw, '"')) {
+                $raw = stripcslashes(substr($raw, 1, -1));
+            } elseif (strlen($raw) >= 2 && $raw[0] === "'" && str_ends_with($raw, "'")) {
+                $raw = substr($raw, 1, -1);
+            } else {
+                $raw = trim(explode('#', $raw, 2)[0]);
+            }
+            $values[$match[1]] = $raw;
+        }
+
+        return $values;
     }
 
     /**
