@@ -2,9 +2,12 @@
 // 最小桩：仓库不带 vendor，测试只验证本包逻辑，不加载/修改 webman。
 namespace Webman\Http {
     class Request {
-        public function __construct(private string $m, private array $h = []) {}
-        public function method() { return $this->m; }
-        public function header($n = null, $d = null) { return $this->h[strtolower($n)] ?? $d; }
+        public function __construct(private string $method, private array $headers = [], private string $ip = '') {}
+        public function method() { return $this->method; }
+        public function header($name = null, $default = null) { return $this->headers[strtolower($name)] ?? $default; }
+        public function post($name = null, $default = null) { return $default; }
+        public function getRemoteIp() { return $this->ip; }
+        public function getRealIp() { return $this->ip; }
     }
     class Response {
         public array $headers = [];
@@ -13,10 +16,17 @@ namespace Webman\Http {
     }
 }
 namespace Webman { interface MiddlewareInterface { public function process(\Webman\Http\Request $r, callable $h): \Webman\Http\Response; } }
+namespace support {
+    class Request extends \Webman\Http\Request {}
+    class Response extends \Webman\Http\Response {}
+}
 namespace support\exception { class BusinessException extends \RuntimeException {} }
 namespace {
     $GLOBALS['__cfg'] = [];
     function config($k, $d = null) { return array_key_exists($k, $GLOBALS['__cfg']) ? $GLOBALS['__cfg'][$k] : $d; }
+    function request() { return $GLOBALS['__request'] ?? null; }
+    function response(string $body = '', int $status = 200, array $headers = []) { return new \support\Response($status, $headers, $body); }
+    function json($data = [], int $options = JSON_UNESCAPED_UNICODE) { return new \support\Response(200, ['Content-Type' => 'application/json'], json_encode($data, $options)); }
     $base = dirname(__DIR__, 2) . '/server/plugin/sandadmin/';
     spl_autoload_register(function ($c) use ($base) {
         if (str_starts_with($c, 'plugin\\sandadmin\\')) {

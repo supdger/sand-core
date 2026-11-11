@@ -14,6 +14,7 @@ use plugin\sandadmin\app\model\system\SystemRole;
 use plugin\sandadmin\app\model\system\SystemUser;
 use plugin\sandadmin\exception\ApiException;
 use plugin\sandadmin\basic\think\BaseLogic;
+use plugin\sandadmin\utils\DevLoginGuard;
 use plugin\sandadmin\utils\ForcedPasswordChange;
 use plugin\sandadmin\utils\JwtSecretGuard;
 use Webman\Event\Event;
@@ -219,18 +220,18 @@ class SystemUserLogic extends BaseLogic
         } catch (\RuntimeException $e) {
             throw new ApiException($e->getMessage(), 400);
         }
-        $adminInfo = $this->model->where('username', $username)->findOrEmpty();
+        $admin = $this->model->where('username', $username)->findOrEmpty();
         $status = 1;
         $message = '登录成功';
-        if ($adminInfo->isEmpty()) {
+        if ($admin->isEmpty()) {
             $message = '账号或密码错误，请重新输入!';
             throw new ApiException($message);
         }
-        if ($adminInfo->status === 2) {
+        if ($admin->status === 2) {
             $status = 0;
             $message = '您已被禁止登录!';
         }
-        if (!password_verify($password, $adminInfo->password)) {
+        if (!password_verify($password, $admin->password)) {
             $status = 0;
             $message = '账号或密码错误，请重新输入!';
         }
@@ -239,23 +240,62 @@ class SystemUserLogic extends BaseLogic
             Event::emit('user.login', compact('username', 'status', 'message'));
             throw new ApiException($message);
         }
-        $adminInfo->login_time = date('Y-m-d H:i:s');
-        $adminInfo->login_ip = request()->getRealIp();
-        $adminInfo->save();
+        return $this->issueToken($admin, $type, $message);
+    }
+
+    /**
+     * 开发本机登录：跳过密码校验，签发与审计流程与 login() 一致。
+     * 入口可用性由 DevLoginGuard 在控制器判定；返回 null 表示配置账号不存在或被禁用。
+     * @param string $type 登录端类型
+     * @return array|null
+     */
+    public function devLogin(string $type = 'pc'): ?array
+    {
+        // 与 login() 一致：密钥不合法时绝不签发可被伪造的令牌。
+        try {
+            JwtSecretGuard::assertRuntimeConfig();
+        } catch (\RuntimeException $e) {
+            throw new ApiException($e->getMessage(), 400);
+        }
+        $username = DevLoginGuard::username();
+        $admin = $this->model->where('username', $username)->findOrEmpty();
+        if ($admin->isEmpty() || $admin->status === 2) {
+            $status = 0;
+            $message = '开发本机登录';
+            Event::emit('user.login', compact('username', 'status', 'message'));
+            return null;
+        }
+        return $this->issueToken($admin, $type, '开发本机登录');
+    }
+
+    /**
+     * 更新登录足迹、签发令牌并写登录审计。
+     * @param SystemUser $admin 已查出的用户记录
+     * @param string $type 登录端类型
+     * @param string $message 写入审计 message 的登录方式说明
+     * @return array
+     */
+    private function issueToken(SystemUser $admin, string $type, string $message): array
+    {
+        $admin->login_time = date('Y-m-d H:i:s');
+        $admin->login_ip = request()->getRealIp();
+        $admin->save();
 
         $access_exp = config('plugin.sandadmin.saithink.access_exp', 3 * 3600);
         $token = JwtToken::generateToken([
             'access_exp' => $access_exp,
-            'id' => $adminInfo->id,
-            'username' => $adminInfo->username,
+            'id' => $admin->id,
+            'username' => $admin->username,
             'type' => $type,
             'plat' => 'sandadmin',
         ]);
         // 登录事件
-        $admin_id = $adminInfo->id;
+        $username = $admin->username;
+        $status = 1;
+        $admin_id = $admin->id;
         Event::emit('user.login', compact('username', 'status', 'message', 'admin_id'));
         // 旧库没有该列时视为未置位；前端据此跳转强制改密页。
-        $token['must_change_password'] = (int) ($adminInfo->toArray()[ForcedPasswordChange::COLUMN] ?? 0) === 1;
+        $token['must_change_password'] = (int) ($admin->toArray()[ForcedPasswordChange::COLUMN] ?? 0) === 1;
         return $token;
     }
 
