@@ -60,6 +60,14 @@ namespace Webman\Exception {
     {
         public $dontReport = [];
         protected $logger;
+        public function __construct()
+        {
+            $this->logger = new class {
+                public function error($message): void
+                {
+                }
+            };
+        }
         public function shouldntReport(\Throwable $e): bool
         {
             return in_array(get_class($e), $this->dontReport, true);
@@ -107,6 +115,8 @@ namespace {
 
     require dirname(__DIR__) . '/server/plugin/sandadmin/exception/SystemException.php';
     require dirname(__DIR__) . '/server/plugin/sandadmin/exception/ApiException.php';
+    require dirname(__DIR__) . '/server/plugin/sandadmin/utils/DebugGuard.php';
+    require dirname(__DIR__) . '/server/plugin/sandadmin/utils/ErrorPayload.php';
     require dirname(__DIR__) . '/server/plugin/sandadmin/app/exception/Handler.php';
     require dirname(__DIR__) . '/server/plugin/sandadmin/basic/OpenController.php';
 

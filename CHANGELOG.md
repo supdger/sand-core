@@ -9,6 +9,12 @@
 - `bin/sand build --production` 拒绝任何 `/install*` 路由。`tools/assert-no-http-install.php` 在构建后请求这些路径，并在删除 `.env` 后再次请求，均须为 404。
 - Worker 启动不再生成安装令牌，也不在进程内改写已安装标志。
 
+安全修复（1.x 安全 P0：F1、F4 插件层）。无数据库变更。
+
+- F1 CORS：删除原样回写 `Origin` 并带 `Allow-Credentials: true` 的 `CrossDomain` 中间件；新增白名单中间件 `Cors`（插件首个中间件），配置 `config/cors.php`，环境变量 `SANDADMIN_CORS_ALLOWED_ORIGINS`（逗号分隔精确来源）、`SANDADMIN_CORS_ALLOW_CREDENTIALS`。默认空 = 同源，不发送任何 `Access-Control-*`；命中才回写精确源并带 `Vary: Origin`；拒绝 `*`/通配。
+- F4：`APP_ENV=production|prod` 且 `app.debug` 为真时启动失败（`SecurityBootstrap`）；异常响应非调试时只含 `code/message/fields/request_id/type`，非业务异常文案统一为 `Server internal error`，不再回显 SQL/路径/栈；`app.debug` 缺省按 false 处理；代码生成器与 `sand-plugin` 脚手架默认 debug 改为 false。
+- 升级影响：跨源部署须显式配置白名单；前端若依赖非业务异常的原始 message 将看到通用文案。
+
 ## 0.2.8（2026-11-03）
 
 安全修复：收敛接口与日志中的秘密字段输出，无数据库变更、无需迁移。

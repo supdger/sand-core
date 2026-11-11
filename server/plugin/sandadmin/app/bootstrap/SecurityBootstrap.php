@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace plugin\sandadmin\app\bootstrap;
 
+use plugin\sandadmin\utils\DebugGuard;
 use plugin\sandadmin\utils\JwtSecretGuard;
 use Throwable;
 
 /**
- * 进程启动自检：JWT 密钥不安全时拒绝启动（worker 内同时停止主进程，避免重启风暴）。
+ * 进程启动自检：生产环境开启 debug 或 JWT 密钥不安全时拒绝启动（worker 内同时停止主进程，避免重启风暴）。
  *
  * 不创建安装令牌，也不在 worker 内改写“已安装”标志。数据库安装只由 CLI 完成，
  * 路由表在进程生命周期内保持源码里的那一份（没有 HTTP 安装路由）。
@@ -23,6 +24,7 @@ final class SecurityBootstrap
     public static function start(?object $worker = null, ?callable $halt = null): void
     {
         try {
+            DebugGuard::assertRuntimeConfig();
             JwtSecretGuard::assertRuntimeConfig();
         } catch (Throwable $error) {
             // 同时写到控制台，避免异常被 worker 重启循环淹没。
