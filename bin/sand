@@ -1,0 +1,12 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+$target = dirname(__DIR__) . '/server/plugin/sandadmin/bin/sand';
+if (!is_file($target)) {
+    fwrite(STDERR, "找不到 sand-core CLI：{$target}\n");
+    exit(1);
+}
+
+require $target;

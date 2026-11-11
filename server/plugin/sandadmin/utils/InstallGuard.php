@@ -7,9 +7,10 @@ namespace plugin\sandadmin\utils;
 use RuntimeException;
 
 /**
- * 安装向导的访问控制：已安装锁定、一次性安装令牌、初始管理员凭据校验。
+ * CLI 安装使用的锁、历史令牌文件路径，以及初始管理员凭据校验。
  *
- * 不依赖 Webman 运行时，所有路径以宿主根目录（base_path()）为基准，便于隔离测试。
+ * HTTP 安装路由已移除，worker 不得调用本类去打开安装面。锁文件只由 CLI 在安装成功后写入。
+ * 不依赖 Webman 运行时，所有路径以宿主根目录（显式传入，或 base_path()）为基准。
  */
 final class InstallGuard
 {

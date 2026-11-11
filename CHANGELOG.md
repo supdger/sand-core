@@ -2,6 +2,13 @@
 
 ## 未发布
 
+安全（F2）：去掉 HTTP 免登安装面。无版本号变更，不随本次说明发布。
+
+- 删除 `InstallController`、安装页和 `/core/install`、`/install/install` 路由。开发与生产使用同一份路由文件，没有按环境重新打开安装入口的开关。
+- 全新安装只走 `bin/sand install`（密码用环境变量，不用命令行参数）。已有库的 `db/update-*.pgsql` 走 `bin/sand migrate`。本包没有 doctrine/migrations，也不再提供 HTTP 过渡入口。
+- `bin/sand build --production` 拒绝任何 `/install*` 路由。`tools/assert-no-http-install.php` 在构建后请求这些路径，并在删除 `.env` 后再次请求，均须为 404。
+- Worker 启动不再生成安装令牌，也不在进程内改写已安装标志。
+
 安全修复（1.x 安全 P0：F1、F4 插件层）。无数据库变更。
 
 - F1 CORS：删除原样回写 `Origin` 并带 `Allow-Credentials: true` 的 `CrossDomain` 中间件；新增白名单中间件 `Cors`（插件首个中间件），配置 `config/cors.php`，环境变量 `SANDADMIN_CORS_ALLOWED_ORIGINS`（逗号分隔精确来源）、`SANDADMIN_CORS_ALLOW_CREDENTIALS`。默认空 = 同源，不发送任何 `Access-Control-*`；命中才回写精确源并带 `Vary: Origin`；拒绝 `*`/通配。
