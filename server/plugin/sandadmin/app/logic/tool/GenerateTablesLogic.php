@@ -321,7 +321,7 @@ class GenerateTablesLogic extends BaseLogic
         if ($table->isEmpty()) {
             throw new ApiException('请选择要生成的表');
         }
-        $debug = config('app.debug', true);
+        $debug = config('app.debug', false);
         if (!$debug) {
             throw new ApiException('非调试模式下，不允许生成文件');
         }
