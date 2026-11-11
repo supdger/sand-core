@@ -157,7 +157,7 @@ export default ({ mode, command }: ConfigEnv) => {
         'echarts/charts',
         'echarts/components',
         'echarts/renderers',
-        'xlsx',
+        'write-excel-file/browser',
         'xgplayer',
         'crypto-js',
         'file-saver',
