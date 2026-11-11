@@ -1,0 +1,2 @@
+# 命名豁免清单：一行一个名字，# 后写理由
+getRealIp # Webman Request 框架 API（safeMode 感知的客户端 ip），测试桩与调用点必须与框架同名
