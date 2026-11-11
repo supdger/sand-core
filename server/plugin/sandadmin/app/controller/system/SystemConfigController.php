@@ -47,6 +47,8 @@ class SystemConfigController extends BaseController
         $this->logic->setOrderType('desc');
         $query = $this->logic->search($where);
         $data = $this->logic->getList($query);
+        // 敏感配置值（云存储密钥、SMTP 密码等）出参打码，内部读取保持明文
+        $data = $this->logic->maskConfigOutput($data);
         return $this->success($data);
     }
 

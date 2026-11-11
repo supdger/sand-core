@@ -11,6 +11,7 @@ use Webman\Http\Request;
 use Webman\Http\Response;
 use Webman\Exception\ExceptionHandler;
 use plugin\sandadmin\exception\ApiException;
+use plugin\sandadmin\exception\SystemException;
 use plugin\sandadmin\utils\SensitiveData;
 
 /**
@@ -64,7 +65,13 @@ class Handler extends ExceptionHandler
                 'trace' => explode("\n", $exception->getTraceAsString())
             ];
         }
-        return new Response(200, ['Content-Type' => 'application/json;charset=utf-8'], json_encode($json));
+        // 显式声明了真实 HTTP 状态（如权限拒绝 403）的异常按声明返回；
+        // 其余沿用项目既有响应壳：HTTP 200 + code 字段，不改为裸 500。
+        $httpStatus = $exception instanceof SystemException
+            && $exception->httpStatus >= 400 && $exception->httpStatus < 600
+            ? $exception->httpStatus
+            : 200;
+        return new Response($httpStatus, ['Content-Type' => 'application/json;charset=utf-8'], json_encode($json));
     }
 }
 

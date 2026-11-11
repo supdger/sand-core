@@ -118,7 +118,12 @@
                     />
                   </template>
                   <template v-if="item.input_type === 'input'">
-                    <el-input v-model="item.value" :placeholder="'请输入' + item.name" />
+                    <el-input
+                      v-model="item.value"
+                      :placeholder="
+                        item.value_masked ? '已配置，重新输入才会更新' : '请输入' + item.name
+                      "
+                    />
                   </template>
                   <template v-if="item.input_type === 'radio'">
                     <el-radio-group v-model="item.value" :options="item.config_select_data" />
@@ -127,7 +132,9 @@
                     <el-input
                       type="textarea"
                       v-model="item.value"
-                      :placeholder="'请输入' + item.name"
+                      :placeholder="
+                        item.value_masked ? '已配置，重新输入才会更新' : '请输入' + item.name
+                      "
                     />
                   </template>
                   <template v-if="item.input_type === 'uploadImage'">
@@ -139,6 +146,10 @@
                   <template v-if="item.input_type === 'wangEditor'">
                     <sa-editor v-model="item.value" />
                   </template>
+                  <div v-if="item.value_masked" class="flex items-center gap-2 py-1">
+                    <el-tag type="success" size="small" effect="plain">已配置</el-tag>
+                    <span class="text-xs text-gray-400">留空则不修改</span>
+                  </div>
                   <div class="text-gray-400 text-xs py-2">{{ item.remark }}</div>
                 </ElFormItem>
               </template>
@@ -230,6 +241,23 @@
   const formArray = ref<any[]>([])
   const email = ref('')
 
+  /** 后端「配置密钥打码」占位符：提交该值表示保留库中原值 */
+  const MASKED_VALUE_PLACEHOLDER = '******'
+
+  /** 配置项中与密钥打码相关的字段（其余字段原样透传给后端） */
+  interface MaskedConfigItem {
+    value?: unknown
+    value_masked?: boolean
+    [key: string]: unknown
+  }
+
+  /**
+   * 敏感项且用户未重新输入（输入框留空）→ 视为「不修改」
+   */
+  const isMaskedUnchanged = (item: MaskedConfigItem): boolean =>
+    item.value_masked === true &&
+    (item.value === '' || item.value === null || item.value === undefined)
+
   const configVisible = ref(false)
 
   // 配置选中行
@@ -282,6 +310,11 @@
           item.display = false
         } else {
           item.display = true
+        }
+        // 敏感配置已打码：value 是占位符 '******'，不当真实值展示，输入框置空；
+        // 提交时由 submit 统一回填占位符，避免空串把密钥清空
+        if (item.value_masked) {
+          item.value = ''
         }
         return item
       })
@@ -423,9 +456,14 @@
   }
 
   const submit = async (params: any) => {
+    // 已配置的敏感项：输入框留空表示「不修改」，必须回填占位符让后端保留原值；
+    // 绝不能提交空串，否则会按现有语义把密钥清空。用户输入新值则原样提交。
+    const config = (params as MaskedConfigItem[]).map((item) =>
+      isMaskedUnchanged(item) ? { ...item, value: MASKED_VALUE_PLACEHOLDER } : item
+    )
     const data = {
       group_id: selectedId.value,
-      config: params
+      config
     }
     await api.batchUpdate(data)
     ElMessage.success('保存成功')
