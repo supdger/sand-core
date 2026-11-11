@@ -115,7 +115,7 @@ class SystemAttachmentLogic extends BaseLogic
 
             copy($save_path, $newPath);
             unlink($save_path);
-            $domain = Arr::getConfigValue($uploadConfig, 'local_domain');
+            $domain = Helper::localStorageDomain(Arr::getConfigValue($uploadConfig, 'local_domain'));
             $uri = Arr::getConfigValue($uploadConfig, 'local_uri');
             $baseUrl = $domain . $uri . $folder . '/';
 
@@ -133,6 +133,63 @@ class SystemAttachmentLogic extends BaseLogic
             $this->model->save($info);
             return $info;
         }
+    }
+
+    /**
+     * 删除数据
+     * @param mixed $ids
+     * @return bool
+     */
+    public function destroy($ids): bool
+    {
+        // 本地存储（storage_mode=1）的附件记录删除时同步删除物理文件，
+        // 避免孤儿文件累积；远端对象存储不在此处处理。
+        $files = [];
+        $list = $this->model->whereIn('id', (array) $ids)->select();
+        foreach ($list as $item) {
+            if ((int) $item->storage_mode !== 1) {
+                continue;
+            }
+            $file = $this->localFilePath((string) $item->storage_path);
+            if ($file !== null) {
+                $files[] = $file;
+            }
+        }
+        $result = $this->transaction(function () use ($ids) {
+            return $this->model->destroy($ids);
+        });
+        // 记录删除成功后才清理文件；unlink 失败不回滚记录，残留文件走人工/巡检清理
+        if ($result) {
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * 把附件的 storage_path 解析成可安全删除的绝对路径。
+     * 只允许删除项目目录内确实存在的文件，路径穿越或文件不存在时返回 null。
+     */
+    private function localFilePath(string $storagePath): ?string
+    {
+        if ($storagePath === '') {
+            return null;
+        }
+        $base = rtrim(base_path(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $absolute = str_starts_with($storagePath, DIRECTORY_SEPARATOR)
+            ? $storagePath
+            : $base . $storagePath;
+        $resolvedPath = realpath($absolute);
+        if ($resolvedPath === false || !is_file($resolvedPath)) {
+            return null;
+        }
+        if (!str_starts_with($resolvedPath, $base)) {
+            return null;
+        }
+        return $resolvedPath;
     }
 
     /**

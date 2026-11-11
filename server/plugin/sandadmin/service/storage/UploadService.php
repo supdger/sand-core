@@ -9,6 +9,7 @@ namespace plugin\sandadmin\service\storage;
 use plugin\sandadmin\app\logic\system\SystemConfigLogic;
 use plugin\sandadmin\exception\ApiException;
 use plugin\sandadmin\utils\Arr;
+use plugin\sandadmin\utils\Helper;
 
 /**
  * 文件上传服务
@@ -56,7 +57,7 @@ class UploadService
                     'dirname' => function () {
                         return date('Ymd');
                     },
-                    'domain' => Arr::getConfigValue($uploadConfig, 'local_domain'),
+                    'domain' => Helper::localStorageDomain(Arr::getConfigValue($uploadConfig, 'local_domain')),
                     'uri' => Arr::getConfigValue($uploadConfig, 'local_uri'),
                     'algo' => 'sha1',
                 ];
