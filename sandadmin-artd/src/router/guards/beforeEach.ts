@@ -244,6 +244,11 @@ function continueWithDynamicRoutes(
 
   if (!isRegisteredRouteTarget(router, to)) {
     closeLoading(to)
+    // 「/」是应用入口，本身没有路由记录；交给首页跳转静默落到首页，
+    // 否则每次打开应用根地址都会误报「页面不可用」并闪一下兜底提示。
+    if (to.path === '/' && handleRootPathRedirect(to, next, router)) {
+      return
+    }
     const { homePath } = useCommon()
     const fallbackPath =
       resolvableFallbackPath(router, homePath.value) ||
