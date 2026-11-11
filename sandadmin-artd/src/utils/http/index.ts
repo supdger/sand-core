@@ -84,10 +84,11 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse<BaseResponse>) => {
     if (response.config.responseType === 'blob') return response
-    const { code, message } = response.data
+    const { code, message, data } = response.data
     if (code === ApiStatus.success) return response
     if (code === ApiStatus.unauthorized) handleUnauthorizedError(message)
-    throw createHttpError(message || $t('httpMsg.requestFailed'), code)
+    // 业务负载（BaseResponse.data）随错误透传，供 egressBlockedDetails 等结构化消费方读取
+    throw createHttpError(message || $t('httpMsg.requestFailed'), code, data)
   },
   (error) => {
     if (error.response?.status === ApiStatus.unauthorized) handleUnauthorizedError()
@@ -95,9 +96,9 @@ axiosInstance.interceptors.response.use(
   }
 )
 
-/** 统一创建HttpError */
-function createHttpError(message: string, code: number) {
-  return new HttpError(message, code)
+/** 统一创建HttpError；data 为业务负载（BaseResponse.data），不是整个响应信封 */
+function createHttpError(message: string, code: number, data?: unknown) {
+  return new HttpError(message, code, { data })
 }
 
 /** 处理401错误（带防抖） */

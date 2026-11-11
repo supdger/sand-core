@@ -28,12 +28,14 @@ $GLOBALS['__cfg']['app.debug'] = false;
 $pdo = new RuntimeException("SQLSTATE[42P01]: relation \"sa_x\" does not exist SELECT * FROM sa_x at /srv/app/x.php", 7);
 $body = json_encode(ErrorPayload::build($pdo, 'abc123'), JSON_UNESCAPED_UNICODE);
 $keys = array_keys(ErrorPayload::build($pdo, 'abc123'));
-check($keys === ['code', 'message', 'fields', 'request_id', 'type'], '生产字段集仅 code/message/fields/request_id/type');
+check($keys === ['code', 'message', 'fields', 'request_id'], '生产字段集仅 code/message/fields/request_id');
 check(!preg_match('/SQLSTATE|SELECT|\/srv\/|\.php|#0|trace|file|line/i', $body), '生产响应不含 SQL/路径/栈: ' . $body);
 $biz = ErrorPayload::build(new BusinessException('请选择要生成的表'), 'r');
 check($biz['message'] === '请选择要生成的表', '业务异常文案保留');
 $biz500 = ErrorPayload::build(new BusinessException('boom', 500), 'r');
 check($biz500['message'] === ErrorPayload::GENERIC_MESSAGE, 'code=500 通用文案');
+$sys = ErrorPayload::build(new \plugin\sandadmin\exception\SystemException('权限不足，无法访问或操作', 403, null, 403), 'r');
+check($sys['message'] === '权限不足，无法访问或操作', 'SystemException 用户向文案透出');
 
 putenv('APP_ENV=dev');
 $GLOBALS['__cfg']['app.debug'] = true;

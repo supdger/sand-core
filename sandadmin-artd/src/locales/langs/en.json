@@ -238,7 +238,7 @@
     "evening": "Good evening!"
   },
   "exceptionPage": {
-    "403": "Sorry, you do not have permission to access this page",
+    "403": "You don't have permission for this page. Please contact your administrator.",
     "404": "Sorry, the page you are trying to access does not exist",
     "500": "Sorry, there was an error on the server",
     "gohome": "Go Home"

@@ -237,7 +237,12 @@ class InstallController extends OpenController
 
         $this->generateConfig($driver);
 
-        $env_config = $this->renderEnv([
+        // 已有 .env 中的用户配置值一律保留，仅缺失项写默认：服务端口是部署者
+        // 常改项，绝不能被安装/升级回写为默认 8787/2206；其余安装器不管理的
+        // 键也原样并入，防止竞态下新建的 .env 覆盖既有配置。
+        $envPath = base_path() . DIRECTORY_SEPARATOR . '.env';
+        $existingEnv = $this->readEnvAssignments($envPath);
+        $envEntries = [
             '# 数据库配置',
             'DB_TYPE' => $driver,
             'DB_HOST' => (string) $host,
@@ -264,10 +269,11 @@ class InstallController extends OpenController
             'FRONTEND_DIR' => 'sandadmin-artd',
             '',
             '# 服务端口（默认值可按项目环境调整）',
-            'SANDADMIN_SERVER_PORT' => '8787',
-            'SANDADMIN_CHANNEL_PORT' => '2206',
-        ]);
-        file_put_contents(base_path() . DIRECTORY_SEPARATOR . '.env', $env_config);
+            'SANDADMIN_SERVER_PORT' => $existingEnv['SANDADMIN_SERVER_PORT'] ?? '8787',
+            'SANDADMIN_CHANNEL_PORT' => $existingEnv['SANDADMIN_CHANNEL_PORT'] ?? '2206',
+        ];
+        $env_config = $this->renderEnvPreservingOperatorValues($envEntries, $existingEnv);
+        file_put_contents($envPath, $env_config);
 
         $this->reloadWorkers();
 
@@ -323,6 +329,66 @@ class InstallController extends OpenController
             'password' => password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT),
             'placeholder' => '!',
         ]);
+    }
+
+    /**
+     * 渲染安装器管理的 .env 条目，并原样并入既有文件中安装器不管理的键，
+     * 保证已有用户配置（含自定义服务端口）不被回写覆盖。
+     *
+     * @param array<int|string,string> $entries 安装器条目（整数键为注释/空行）
+     * @param array<string,string> $existing 既有 .env 键值
+     */
+    protected function renderEnvPreservingOperatorValues(array $entries, array $existing): string
+    {
+        $managed = [];
+        foreach ($entries as $key => $value) {
+            if (!is_int($key)) {
+                $managed[$key] = true;
+            }
+        }
+        $content = $this->renderEnv($entries);
+        $preserved = [];
+        foreach ($existing as $existingKey => $existingValue) {
+            if (!isset($managed[$existingKey])) {
+                $preserved[$existingKey] = $existingValue;
+            }
+        }
+        if ($preserved !== []) {
+            $content .= PHP_EOL . '# 已有用户配置（安装器未管理的键，原样保留）' . PHP_EOL
+                . $this->renderEnv($preserved);
+        }
+
+        return $content;
+    }
+
+    /**
+     * 读取既有 .env 的键值（不存在时返回空表）。仅解析 `KEY = value` 形式的
+     * 赋值行，单双引号按 phpdotenv 语义去壳；注释、export 前缀与非赋值行忽略。
+     *
+     * @return array<string,string>
+     */
+    protected function readEnvAssignments(string $envPath): array
+    {
+        if (!is_file($envPath)) {
+            return [];
+        }
+        $values = [];
+        foreach (file($envPath, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            if (preg_match('/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/', $line, $match) !== 1) {
+                continue;
+            }
+            $raw = trim((string) $match[2]);
+            if (strlen($raw) >= 2 && $raw[0] === '"' && str_ends_with($raw, '"')) {
+                $raw = stripcslashes(substr($raw, 1, -1));
+            } elseif (strlen($raw) >= 2 && $raw[0] === "'" && str_ends_with($raw, "'")) {
+                $raw = substr($raw, 1, -1);
+            } else {
+                $raw = trim(explode('#', $raw, 2)[0]);
+            }
+            $values[$match[1]] = $raw;
+        }
+
+        return $values;
     }
 
     /**
