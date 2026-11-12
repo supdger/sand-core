@@ -46,6 +46,11 @@ class Handler extends ExceptionHandler
 
     public function render(Request $request, Throwable $exception): Response
     {
+        // 保留了基类的分发：声明了 render() 的异常（ApiException 等）自己组装响应，
+        // 保证 error_code / rejected 等机器可读字段不被这里吞掉。
+        if (method_exists($exception, 'render') && ($response = $exception->render($request))) {
+            return $response;
+        }
         $requestId = ErrorPayload::newRequestId();
         // 日志与响应分离：内部信息只进日志，用 request_id 关联。
         $this->logger->error('[request_id]: ' . $requestId . ' ' . get_class($exception));

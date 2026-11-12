@@ -12,6 +12,20 @@ namespace plugin\sandadmin\utils;
 class ServerMonitor
 {
     /**
+     * 平台判定：stristr(PHP_OS,'WIN') 会把 Darwin 误判为 Windows，
+     * 只比较前三位才可靠（WINNT/WIN32/Windows 均以 WIN 开头）。
+     */
+    private function isWindows(): bool
+    {
+        return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+    }
+
+    private function isMacOS(): bool
+    {
+        return PHP_OS === 'Darwin';
+    }
+
+    /**
      * 获取内存信息
      * @return array
      */
@@ -19,13 +33,15 @@ class ServerMonitor
     {
         $totalMem = 0; // 总内存 (Bytes)
         $freeMem  = 0; // 可用/剩余内存 (Bytes)
+        // 平台不支持或读取失败时保持 false，前端据此显示「暂时读不到」而不是 0/NaN
+        $supported = true;
 
-        if (stristr(PHP_OS, 'WIN')) {
+        if ($this->isWindows()) {
             // Windows 系统
             // 一次性获取 总可见内存 和 空闲物理内存 (单位都是 KB)
             // TotalVisibleMemorySize: 操作系统可识别的内存总数 (比物理内存条总数略少，更准确反映可用上限)
             // FreePhysicalMemory: 当前可用物理内存
-            $cmd = 'wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /format:csv';
+            $cmd = 'wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /format:csv 2>NUL';
             $output = shell_exec($cmd);
             $output = mb_convert_encoding($output ?? '', 'UTF-8', 'GBK, UTF-8, ASCII');
             $lines  = explode("\n", trim($output));
@@ -44,7 +60,26 @@ class ServerMonitor
                     break;
                 }
             }
-        } else {
+        } elseif ($this->isMacOS()) {
+            // macOS 系统：无 /proc，总量走 sysctl，空闲量走 vm_stat（单位是页）
+            $total = shell_exec('sysctl -n hw.memsize 2>/dev/null');
+            if (is_string($total) && is_numeric(trim($total))) {
+                $totalMem = floatval(trim($total));
+            }
+            $vmStat = shell_exec('vm_stat 2>/dev/null');
+            if (is_string($vmStat) && preg_match('/page size of (\d+) bytes/i', $vmStat, $sizeMatch)) {
+                $pageSize = (int) $sizeMatch[1];
+                $freePages = 0;
+                foreach (['Pages free', 'Pages inactive', 'Pages speculative'] as $label) {
+                    if (preg_match('/^' . preg_quote($label, '/') . ':\s+(\d+)\./m', $vmStat, $pageMatch)) {
+                        $freePages += (int) $pageMatch[1];
+                    }
+                }
+                if ($pageSize > 0 && $freePages > 0) {
+                    $freeMem = $freePages * $pageSize;
+                }
+            }
+        } elseif (PHP_OS === 'Linux') {
             // Linux 系统
             // 读取 /proc/meminfo，效率远高于 shell_exec('cat ...')
             $memInfo = @file_get_contents('/proc/meminfo');
@@ -64,32 +99,42 @@ class ServerMonitor
                     }
                 }
             }
+        } else {
+            // 其他平台未实现读取方式，明确标记不支持
+            $supported = false;
+        }
+
+        if ($totalMem <= 0) {
+            $supported = false;
         }
 
         // 计算已用内存
-        $usedMem = $totalMem - $freeMem;
+        $usedMem = $supported ? $totalMem - $freeMem : 0;
 
-        // 避免除以0
-        $rate = ($totalMem > 0) ? ($usedMem / $totalMem) * 100 : 0;
+        // 避免除以0；读不到真实数字时 rate 返回 null，前端显示「暂时读不到」而不是 NaN%
+        $rate = $supported ? ($usedMem / $totalMem) * 100 : null;
 
         // PHP 自身占用
         $phpMem = memory_get_usage(true);
 
         return [
-            // 人类可读格式 (String)
-            'total'     => $this->formatBytes($totalMem),
-            'free'      => $this->formatBytes($freeMem),
-            'used'      => $this->formatBytes($usedMem),
+            // supported=false 表示本平台读不到内存数据，展示「暂时读不到，稍后刷新」
+            'supported' => $supported,
+
+            // 人类可读格式 (String)；读不到时给空串而不是误导性的 0 B
+            'total'     => $supported ? $this->formatBytes($totalMem) : '',
+            'free'      => $supported ? $this->formatBytes($freeMem) : '',
+            'used'      => $supported ? $this->formatBytes($usedMem) : '',
             'php'       => $this->formatBytes($phpMem),
-            'rate'      => sprintf('%.2f', $rate) . '%',
+            'rate'      => $rate === null ? null : sprintf('%.2f', $rate) . '%',
 
             // 原始数值 (Float/Int)，方便前端图表使用或逻辑判断，统一单位 Bytes
             'raw' => [
-                'total' => $totalMem,
-                'free'  => $freeMem,
-                'used'  => $usedMem,
+                'total' => $supported ? $totalMem : null,
+                'free'  => $supported ? $freeMem : null,
+                'used'  => $supported ? $usedMem : null,
                 'php'   => $phpMem,
-                'rate'  => round($rate, 2)
+                'rate'  => $rate === null ? null : round($rate, 2)
             ]
         ];
     }
@@ -123,11 +168,11 @@ class ServerMonitor
     {
         $disk = [];
 
-        if (stristr(PHP_OS, 'WIN')) {
+        if ($this->isWindows()) {
             // Windows 系统
             // 使用 CSV 格式输出，避免空格解析错误；SkipTop=1 跳过空行
             // LogicalDisk 包含: Caption(盘符), FreeSpace(剩余字节), Size(总字节)
-            $cmd = 'wmic logicaldisk get Caption,FreeSpace,Size /format:csv';
+            $cmd = 'wmic logicaldisk get Caption,FreeSpace,Size /format:csv 2>NUL';
             $output = shell_exec($cmd);
 
             // 转换编码，防止中文乱码（视服务器环境而定，通常 Windows CMD 输出为 GBK）
@@ -169,7 +214,48 @@ class ServerMonitor
                 }
             }
 
-        } else {
+        } elseif ($this->isMacOS()) {
+            // macOS 系统：df 不支持 -T（无类型列），-Pk 输出 1024 字节 POSIX 行
+            $output = shell_exec('df -Pk 2>/dev/null');
+            $lines = explode("\n", trim($output ?? ''));
+
+            // 过滤表头
+            array_shift($lines);
+
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line)) continue;
+
+                // df -Pk 输出列: Filesystem(0), 1024-blocks(1), Used(2), Available(3), Capacity(4), Mounted on(5+)
+                $parts = preg_split('/\s+/', $line);
+                if (count($parts) < 6 || !is_numeric($parts[1])) continue;
+
+                $filesystem = $parts[0];
+                $mountedOn  = implode(' ', array_slice($parts, 5));
+
+                // 过滤虚拟文件系统，只保留真实挂载
+                if (str_starts_with($filesystem, 'devfs') || str_starts_with($filesystem, 'map ')) continue;
+
+                $totalSize = floatval($parts[1]) * 1024;
+                $usedSize  = floatval($parts[2]) * 1024;
+                $freeSize  = floatval($parts[3]) * 1024;
+                if ($totalSize <= 0) continue;
+
+                $disk[] = [
+                    'filesystem'     => $filesystem,
+                    'mounted_on'     => $mountedOn,
+                    'size'           => $this->formatBytes($totalSize),
+                    'available'      => $this->formatBytes($freeSize),
+                    'used'           => $this->formatBytes($usedSize),
+                    'use_percentage' => sprintf('%.2f', ($usedSize / $totalSize) * 100) . '%',
+                    'raw'            => [
+                        'size'      => $totalSize,
+                        'available' => $freeSize,
+                        'used'      => $usedSize
+                    ]
+                ];
+            }
+        } elseif (PHP_OS === 'Linux') {
             // Linux 系统
             // -P: POSIX 输出格式（强制在一行显示，防止长挂载点换行）
             // -T: 显示文件系统类型

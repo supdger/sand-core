@@ -34,8 +34,18 @@ class SystemServerController extends BaseController
     #[Permission('服务监控', 'core:server:monitor')]
     public function monitor(Request $request): Response
     {
+        // 非 Linux 不采集：Darwin 上跑 Windows 命令会把 stderr 写进响应导致 502。
+        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'LIN') {
+            $osName = PHP_OS === 'Darwin' ? 'macOS' : PHP_OS;
+            return $this->success([
+                'supported' => false,
+                'os_name' => $osName,
+            ]);
+        }
         $service = new ServerMonitor();
         return $this->success([
+            'supported' => true,
+            'os_name' => 'Linux',
             'memory' => $service->getMemoryInfo(),
             'disk' => $service->getDiskInfo(),
             'phpEnv' => $service->getPhpAndEnvInfo(),

@@ -5,6 +5,7 @@ use plugin\sandadmin\app\logic\system\SystemConfigLogic;
 use plugin\sandadmin\app\model\system\SystemAttachment;
 use plugin\sandadmin\exception\ApiException;
 use plugin\sandadmin\utils\Arr;
+use plugin\sandadmin\utils\Helper;
 
 /**
  * 切片上传服务
@@ -113,7 +114,7 @@ class ChunkUploadService
             unlink($chunkFile);
         }
 
-        $domain = Arr::getConfigValue($this->config, 'local_domain');
+        $domain = Helper::localStorageDomain(Arr::getConfigValue($this->config, 'local_domain'));
         $uri = Arr::getConfigValue($this->config, 'local_uri');
         $baseUrl = $domain . $uri . $this->folder . '/';
 

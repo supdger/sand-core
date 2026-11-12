@@ -215,6 +215,26 @@ class Helper
     }
 
     /**
+     * 本地存储访问域名。写死的 8787 占位按未配置处理，避免换端口后预览全部拒绝连接。
+     * 顺序：SANDADMIN_STORAGE_DOMAIN，其次后台自填的 local_domain，
+     * 最后按 SANDADMIN_SERVER_PORT 推导本机地址（默认 8787）。
+     * @param string $configured 后台配置 local_domain 的值
+     * @return string 不带结尾斜杠的域名
+     */
+    public static function localStorageDomain(string $configured): string
+    {
+        $override = trim((string) env('SANDADMIN_STORAGE_DOMAIN', ''));
+        if ($override !== '') {
+            return rtrim($override, '/');
+        }
+        $configured = trim($configured);
+        if ($configured !== '' && $configured !== 'http://127.0.0.1:8787') {
+            return rtrim($configured, '/');
+        }
+        return 'http://127.0.0.1:' . env('SANDADMIN_SERVER_PORT', '8787');
+    }
+
+    /**
      * 只替换一次字符串
      * @param $needle
      * @param $replace

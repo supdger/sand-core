@@ -33,6 +33,8 @@ class SystemMenuLogic extends BaseLogic
     public function add($data): mixed
     {
         $data = $this->handleData($data);
+        // 新建请求一律忽略调用方传入的主键，id 由数据库生成
+        unset($data['id']);
         return $this->model->save($data);
     }
 
