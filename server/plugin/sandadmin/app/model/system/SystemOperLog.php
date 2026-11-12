@@ -8,6 +8,7 @@
 namespace plugin\sandadmin\app\model\system;
 
 use plugin\sandadmin\basic\think\BaseModel;
+use plugin\sandadmin\utils\OperRouteLike;
 
 /**
  * 操作日志模型
@@ -38,5 +39,17 @@ class SystemOperLog extends BaseModel
     protected $pk = 'id';
 
     protected $table = 'sand_system_oper_log';
+
+    /**
+     * 路由按片段匹配。输入里的 % 和 _ 不当作通配符。
+     */
+    public function searchRouterAttr(mixed $query, mixed $value): void
+    {
+        $text = trim((string) $value);
+        if ($text === '') {
+            return;
+        }
+        $query->where('router', 'like', OperRouteLike::pattern($text));
+    }
 
 }
