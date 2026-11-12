@@ -1,5 +1,40 @@
 # 更新记录
 
+## 未发布
+
+## 0.2.9（2026-11-11）
+
+安全与安装面收敛：去掉免登录 HTTP 安装面（安装与升级只走 CLI）、收敛 CORS 与生产 debug 暴露面、前端载荷同步依赖安全修复。本版本不新增 `db/update-*.pgsql`，已有库升级不需要手工执行迁移 SQL（`sand_schema_migration` 由 `bin/sand migrate` 自建自记）。
+
+安全（F2）：去掉 HTTP 免登安装面。
+
+- 删除 `InstallController`、安装页和 `/core/install`、`/install/install` 路由。开发与生产使用同一份路由文件，没有按环境重新打开安装入口的开关。
+- 全新安装只走 `bin/sand install`（密码用环境变量，不用命令行参数）。已有库的 `db/update-*.pgsql` 走 `bin/sand migrate`。本包没有 doctrine/migrations，也不再提供 HTTP 过渡入口。
+- `bin/sand build --production` 拒绝任何 `/install*` 路由。`tools/assert-no-http-install.php` 在构建后请求这些路径，并在删除 `.env` 后再次请求，均须为 404。
+- Worker 启动不再生成安装令牌，也不在进程内改写已安装标志。
+- CLI 安装器写 `.env` 时保留运维已配置的自定义值，不再整体覆盖。
+
+安全修复（1.x 安全 P0：F1、F4 插件层）。无数据库变更。
+
+- F1 CORS：删除原样回写 `Origin` 并带 `Allow-Credentials: true` 的 `CrossDomain` 中间件；新增白名单中间件 `Cors`（插件首个中间件），配置 `config/cors.php`，环境变量 `SANDADMIN_CORS_ALLOWED_ORIGINS`（逗号分隔精确来源）、`SANDADMIN_CORS_ALLOW_CREDENTIALS`。默认空 = 同源，不发送任何 `Access-Control-*`；命中才回写精确源并带 `Vary: Origin`；拒绝 `*`/通配。
+- F4：`APP_ENV=production|prod` 且 `app.debug` 为真时启动失败（`SecurityBootstrap`）；异常响应非调试时只含 `code/message/fields/request_id`，非业务异常文案统一为 `Server internal error`，不再回显 SQL/路径/栈；`app.debug` 缺省按 false 处理；代码生成器与 `sand-plugin` 脚手架默认 debug 改为 false。
+- 升级影响：跨源部署须显式配置白名单；前端若依赖非业务异常的原始 message 将看到通用文案。
+
+前端载荷：同步 sandadmin#58 依赖安全修复。
+
+- 移除无修复版本的 `xlsx` 依赖，Excel 导出改用 `write-excel-file`；`art-excel-import` 组件删除（xlsx 导入能力一并下线），仅保留 `art-excel-export` 导出。
+- 升级 `axios`、`vue`、`vue-i18n`、`echarts` 等依赖；`pnpm-workspace.yaml` 新增 `overrides`，把 lodash、postcss、nanoid、markdown-it 等传递依赖钉在已修复版本。
+- 下游宿主 `composer update supdger/sand-core` 后 `sand:publish` 即使用本载荷，不会再把宿主前端还原成 xlsx 旧版并复活 `art-excel-import/`。
+
+修复（配套宿主侧错误与配置处理）：
+
+- HTTP 业务错误响应的 `data` 字段透传到前端；`SystemException` 透出 message 以保留 403 中文原因。
+- 403 无权限页文案与按钮精简，权限拒绝返回真实 HTTP 403。
+- 系统配置接口敏感值出参打码，写入侧占位符保留原值；`SensitiveData` 凭据键口径扩展，回收站与操作日志补打码。
+- `Throwable` 参数显式可空化。
+
+合规与文档：LICENSE 改为本方与 saithink 双版权行并新增 NOTICE；新增 AGENTS.md 代理入口。
+
 ## 0.2.8（2026-11-03）
 
 安全修复：收敛接口与日志中的秘密字段输出，无数据库变更、无需迁移。

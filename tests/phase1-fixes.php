@@ -10,8 +10,10 @@ declare(strict_types=1);
  * Covers:
  *   1. SystemException carries an explicit ?Throwable and an opt-in real HTTP
  *      status; permission denial renders HTTP 403 + plain Chinese, never 500.
- *   2. The installer .env writer preserves operator-configured values
- *      (custom ports) and only writes defaults for missing keys.
+ *
+ * 注：原第 2 节针对 HTTP 安装控制器的 .env 保留值断言随 InstallController
+ * 删除（F2：安装只走 CLI）一并移除；CLI 安装器的 .env 行为由
+ * tools/assert-no-http-install.php 与 bin/sand install 覆盖。
  */
 
 namespace Webman\Http {
@@ -58,6 +60,14 @@ namespace Webman\Exception {
     {
         public $dontReport = [];
         protected $logger;
+        public function __construct()
+        {
+            $this->logger = new class {
+                public function error($message): void
+                {
+                }
+            };
+        }
         public function shouldntReport(\Throwable $e): bool
         {
             return in_array(get_class($e), $this->dontReport, true);
@@ -105,9 +115,10 @@ namespace {
 
     require dirname(__DIR__) . '/server/plugin/sandadmin/exception/SystemException.php';
     require dirname(__DIR__) . '/server/plugin/sandadmin/exception/ApiException.php';
+    require dirname(__DIR__) . '/server/plugin/sandadmin/utils/DebugGuard.php';
+    require dirname(__DIR__) . '/server/plugin/sandadmin/utils/ErrorPayload.php';
     require dirname(__DIR__) . '/server/plugin/sandadmin/app/exception/Handler.php';
     require dirname(__DIR__) . '/server/plugin/sandadmin/basic/OpenController.php';
-    require dirname(__DIR__) . '/server/plugin/sandadmin/app/controller/InstallController.php';
 
     use plugin\sandadmin\app\exception\Handler;
     use plugin\sandadmin\exception\SystemException;
@@ -141,46 +152,5 @@ namespace {
     $assert($handler->render(new Request(), new \RuntimeException('boom', 0))->getStatusCode() === 200,
         'generic exceptions keep HTTP-200 shell');
 
-    // 4. Installer env merge preserves operator-configured ports and unmanaged keys.
-    $controller = (new ReflectionClass(\plugin\sandadmin\app\controller\InstallController::class))
-        ->newInstanceWithoutConstructor();
-    $invoke = static function (string $method, array $args) use ($controller): mixed {
-        $m = new ReflectionMethod($controller, $method);
-        $m->setAccessible(true);
-        return $m->invokeArgs($controller, $args);
-    };
-
-    $envPath = sys_get_temp_dir() . '/sandadmin-env-fixture-' . getmypid() . '.env';
-    file_put_contents($envPath, "SANDADMIN_SERVER_PORT = 25879\nSANDADMIN_CHANNEL_PORT = \"25206\"\nEXTRA_FLAG = keep-me\n# comment\nDB_NAME = olddb\n");
-    $existing = $invoke('readEnvAssignments', [$envPath]);
-    $assert(($existing['SANDADMIN_SERVER_PORT'] ?? null) === '25879'
-        && ($existing['SANDADMIN_CHANNEL_PORT'] ?? null) === '25206'
-        && ($existing['EXTRA_FLAG'] ?? null) === 'keep-me',
-        'readEnvAssignments parses plain, quoted and spaced entries');
-
-    $entries = [
-        '# 数据库配置', 'DB_TYPE' => 'pgsql', 'DB_NAME' => 'newdb',
-        '# 服务端口', 'SANDADMIN_SERVER_PORT' => $existing['SANDADMIN_SERVER_PORT'] ?? '8787',
-        'SANDADMIN_CHANNEL_PORT' => $existing['SANDADMIN_CHANNEL_PORT'] ?? '2206',
-    ];
-    $rendered = $invoke('renderEnvPreservingOperatorValues', [$entries, $existing]);
-    $assert(str_contains($rendered, 'SANDADMIN_SERVER_PORT = "25879"')
-        && str_contains($rendered, 'SANDADMIN_CHANNEL_PORT = "25206"'),
-        'operator-configured ports are preserved verbatim');
-    $assert(!str_contains($rendered, '"8787"') && !str_contains($rendered, '"2206"'),
-        'default ports are never written back over configured values');
-    $assert(str_contains($rendered, 'EXTRA_FLAG = "keep-me"'),
-        'unmanaged operator keys are merged, not clobbered');
-    $assert(str_contains($rendered, 'DB_NAME = "newdb"'),
-        'installer-owned keys still take the fresh form values');
-
-    $fresh = $invoke('renderEnvPreservingOperatorValues', [[
-        'SANDADMIN_SERVER_PORT' => '8787', 'SANDADMIN_CHANNEL_PORT' => '2206',
-    ], []]);
-    $assert(str_contains($fresh, 'SANDADMIN_SERVER_PORT = "8787"')
-        && str_contains($fresh, 'SANDADMIN_CHANNEL_PORT = "2206"'),
-        'missing keys still receive the defaults');
-
-    unlink($envPath);
     echo "ALL PHASE-1 ASSERTIONS PASSED\n";
 }

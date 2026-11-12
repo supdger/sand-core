@@ -63,12 +63,19 @@
       "/sandadmin-artd/scripts/clean-dev.ts"
     ]
   },
+  "bin": [
+    "bin/sand"
+  ],
   "scripts": {
     "sand:publish": [
       "@php tools/publish-frontend.php"
+    ],
+    "sand:check-http-install": [
+      "@php tools/assert-no-http-install.php"
     ]
   },
   "scripts-descriptions": {
-    "sand:publish": "Publish or reconcile the sandadmin-artd frontend payload (idempotent)"
+    "sand:publish": "Publish or reconcile the sandadmin-artd frontend payload (idempotent)",
+    "sand:check-http-install": "Fail if an HTTP install route exists or /install survives a production route build"
   }
 }

@@ -19,7 +19,9 @@
 </template>
 
 <script setup lang="ts">
-  import * as XLSX from 'xlsx'
+  // 1.0 Excel is export-only. `xlsx` (SheetJS) has no fixed npm release, so this
+  // writer uses `write-excel-file`, which only builds workbooks.
+  import writeExcelFile from 'write-excel-file/browser'
   import FileSaver from 'file-saver'
   import { ref, computed, nextTick } from 'vue'
   import { Loading } from '@element-plus/icons-vue'
@@ -209,8 +211,8 @@
     return processedData
   }
 
-  /** 计算列宽度 */
-  const calculateColumnWidths = (data: Record<string, string>[]): XLSX.ColInfo[] => {
+  /** 计算列宽度（字符数） */
+  const calculateColumnWidths = (data: Record<string, string>[]): { wch: number }[] => {
     if (data.length === 0) return []
 
     const sampleSize = Math.min(data.length, 100) // 只取前100行计算列宽
@@ -249,51 +251,24 @@
       const processedData = processData(data)
       emit('export-progress', 30)
 
-      // 创建工作簿
-      const workbook = XLSX.utils.book_new()
-
-      // 设置工作簿属性
-      if (props.workbookOptions) {
-        workbook.Props = {
-          Title: filename,
-          Subject: '数据导出',
-          Author: props.workbookOptions.creator || 'Art Design Pro',
-          Manager: props.workbookOptions.lastModifiedBy || '',
-          Company: '系统导出',
-          Category: '数据',
-          Keywords: 'excel,export,data',
-          Comments: '由系统自动生成',
-          CreatedDate: props.workbookOptions.created || new Date(),
-          ModifiedDate: props.workbookOptions.modified || new Date()
-        }
-      }
+      const titles = Object.keys(processedData[0] ?? {})
+      const widths = calculateColumnWidths(processedData)
+      const sheetRows = [
+        titles,
+        ...processedData.map((row) => titles.map((title) => row[title] ?? ''))
+      ]
+      // workbookOptions stays on the public props for existing callers. The
+      // export-only writer does not embed creator or company metadata.
+      void props.workbookOptions
 
       emit('export-progress', 50)
 
-      // 创建工作表
-      const worksheet = XLSX.utils.json_to_sheet(processedData)
-
-      // 设置列宽度
-      worksheet['!cols'] = calculateColumnWidths(processedData)
-
-      emit('export-progress', 70)
-
-      // 添加工作表到工作簿
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+      const blob = await writeExcelFile(sheetRows, {
+        sheet: sheetName,
+        columns: widths.map((column) => ({ width: column.wch }))
+      }).toBlob()
 
       emit('export-progress', 85)
-
-      // 生成 Excel 文件
-      const excelBuffer = XLSX.write(workbook, {
-        bookType: 'xlsx',
-        type: 'array',
-        compression: true
-      })
-
-      // 创建 Blob 并下载
-      const blob = new Blob([excelBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      })
 
       emit('export-progress', 95)
 

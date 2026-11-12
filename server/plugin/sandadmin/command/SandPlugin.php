@@ -53,7 +53,7 @@ class SandPlugin extends Command
         }
 
         file_put_contents($target . '/app/functions.php', "<?php\n");
-        file_put_contents($target . '/config/app.php', "<?php\n\nreturn [\n    'debug' => true,\n];\n");
+        file_put_contents($target . '/config/app.php', "<?php\n\nreturn [\n    'debug' => false,\n];\n");
         file_put_contents($target . '/config/route.php', "<?php\n\nreturn [];\n");
 
         $io->success("SandAdmin 插件 {$name} 已创建。请按 Sand 平台命名与 PostgreSQL 规范补齐模型、迁移和管理界面。");

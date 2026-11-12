@@ -4,11 +4,12 @@ use Webman\Route;
 
 Route::group('/core', function () {
 
-    Route::get('/install', [plugin\sandadmin\app\controller\InstallController::class, 'index']);
-    Route::post('/install/install', [plugin\sandadmin\app\controller\InstallController::class, 'install']);
+    // 数据库安装只走 CLI（bin/sand install、bin/sand migrate）。此处不得注册安装路由。
 
     Route::get('/captcha', [plugin\sandadmin\app\controller\LoginController::class, 'captcha']);
     Route::post('/login', [plugin\sandadmin\app\controller\LoginController::class, 'login']);
+    Route::get('/dev-login/available', [plugin\sandadmin\app\controller\DevLoginController::class, 'available']);
+    Route::post('/dev-login', [plugin\sandadmin\app\controller\DevLoginController::class, 'login']);
 
     Route::get('/system/user', [plugin\sandadmin\app\controller\SystemController::class, 'userInfo']);
     Route::get("/system/dictAll", [plugin\sandadmin\app\controller\SystemController::class, 'dictAll']);
