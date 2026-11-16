@@ -14,6 +14,9 @@ declare(strict_types=1);
  *      且 assertValid 异常信息不回显明文；占位符值只要求被拒绝。
  *      本文件不落任何默认密钥明文；vendor 文件读不到时输出 SKIP 不判失败。
  *   3. 黑名单判定对所有字段生效（含非对称算法的 private/public key 字段）。
+ *   4. 必跑断言（不依赖 vendor，永不 SKIP）：夹具只存 SHA-256 字面值，
+ *      测试值由固定串确定性派生、不是任何真实默认密钥；断言其哈希与夹具
+ *      一致，且经 matchesBlacklist 的规范化比对路径会被拒绝。
  */
 
 namespace {
@@ -144,6 +147,39 @@ namespace {
     } else {
         $skip('no non-placeholder vendor sample; asymmetric field check skipped');
     }
+
+    // 4. 必跑断言：夹具测试值由固定串确定性派生（不是任何真实默认密钥），
+    //    夹具中只存其 SHA-256 字面值。
+    $fixtureAccess = hash('sha256', 'sand-core/jwt-secret-guard-test-fixture/access');
+    $fixtureHashes = [
+        'ff9197a670b725311f369d85e24de5a4fa6cf39b60113f02335d9af8a7e699a0',
+    ];
+    $assert(
+        hash('sha256', $fixtureAccess) === $fixtureHashes[0],
+        'fixture value hash matches stored fixture hash'
+    );
+    $assert(
+        !JwtSecretGuard::isKnownPublic($fixtureAccess),
+        'fixture value itself is not in production blacklist'
+    );
+
+    $blacklist = new ReflectionMethod(JwtSecretGuard::class, 'matchesBlacklist');
+    $assert(
+        $blacklist->invoke(null, $fixtureAccess, $fixtureHashes) === true,
+        'fixture value rejected via blacklist comparison path'
+    );
+    $assert(
+        $blacklist->invoke(null, '  ' . $fixtureAccess . '  ', $fixtureHashes) === true,
+        'fixture value with surrounding whitespace rejected via normalization'
+    );
+    $assert(
+        $blacklist->invoke(null, "\r\n" . $fixtureAccess . "\r\n\r\n", $fixtureHashes) === true,
+        'fixture value with CRLF and blank lines rejected via normalization'
+    );
+    $assert(
+        $blacklist->invoke(null, 'x' . $fixtureAccess, $fixtureHashes) === false,
+        'value differing inside is not matched'
+    );
 
     echo "ALL JWT-SECRET-GUARD ASSERTIONS PASSED\n";
 }

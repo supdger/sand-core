@@ -81,7 +81,38 @@ final class JwtSecretGuard
     /** 命中即不可用：该值已被公开，任何人都能用它伪造令牌。 */
     public static function isKnownPublic(string $secret): bool
     {
-        return in_array(hash('sha256', $secret), self::KNOWN_PUBLIC_SHA256, true);
+        return self::matchesBlacklist($secret, self::KNOWN_PUBLIC_SHA256);
+    }
+
+    /**
+     * 原值与规范化值各算一次哈希，任一命中即拒绝。
+     * 规范化只用于这里的黑名单比对，规范化后的值不能拿去当密钥使用；
+     * 若日后支持「私钥文件路径」形式的配置，校验必须读取文件内容再做哈希，
+     * 不能只把路径字符串丢进来比对。
+     *
+     * @param list<string> $hashes SHA-256 十六进制黑名单
+     */
+    private static function matchesBlacklist(string $secret, array $hashes): bool
+    {
+        foreach ([$secret, self::normalizeForHash($secret)] as $form) {
+            if (in_array(hash('sha256', $form), $hashes, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 去首尾空白，换行统一为 \n，再去掉首尾残留的空白行（PEM 块常见形态）。 */
+    private static function normalizeForHash(string $secret): string
+    {
+        $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", trim($secret)));
+        while ($lines !== [] && trim($lines[0]) === '') {
+            array_shift($lines);
+        }
+        while ($lines !== [] && trim(end($lines)) === '') {
+            array_pop($lines);
+        }
+        return implode("\n", $lines);
     }
 
     /** @throws RuntimeException 配置不安全时附带修复说明 */
