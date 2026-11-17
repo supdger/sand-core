@@ -12,3 +12,4 @@
 /server/config/plugin/tinywan/jwt/
 install-token
 install.lock
+/composer.lock
