@@ -135,7 +135,7 @@ namespace {
     // 1. Explicit nullable + optional real HTTP status on SystemException.
     $e = new SystemException('权限不足，无法访问或操作', 403, null, 403);
     $assert($e->getCode() === 403 && $e->httpStatus === 403, 'SystemException carries code and declared httpStatus');
-    $assert(new SystemException('x')->httpStatus === 0, 'legacy SystemException defaults keep HTTP-200 shell');
+    $assert((new SystemException('x'))->httpStatus === 0, 'legacy SystemException defaults keep HTTP-200 shell');
 
     // 2. Permission denial renders HTTP 403 + plain Chinese, never a 500 page.
     $handler = new Handler();

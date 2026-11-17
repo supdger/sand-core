@@ -1,0 +1,146 @@
+name: merge-gates（快档）
+
+# 两档门禁中的快档（v4 T-8 / U-6 口径 + R-8 两档拆分）：
+# PHPStan level max、测试、命名检查、依赖方向、基线行数，全过才许合并。
+# 慢档（依赖审计、e2e/集成槽位）在 merge-gates-slow.yml，不挡 PR。
+# 本地同款：tools/pre-merge.sh --fast。
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  phpstan:
+    name: 快档：PHPStan level max
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          # baseline 按 8.4 依赖解析生成；换 PHP 版本会解析出不同
+          # 依赖（如 think-orm 2.x↔3.x），baseline 条目会对不上
+          php-version: '8.4'
+          tools: composer
+      - name: composer update
+        # 库仓不入库 lock（archive.exclude 本就排除），按声明约束现场解析
+        run: composer update --no-interaction --prefer-dist
+      - name: phpstan analyse
+        # 存量 2598 条登记在 phpstan-baseline.neon，本步保证不新增错误
+        run: vendor/bin/phpstan analyse --no-progress
+
+  strict-types:
+    name: 快档：strict types 与禁用写法
+    # 新增违规（命中 − 基线）即 fail，挡住不改基线直接加违规的绕过路径；
+    # 脚本只用 git + grep，不需要 composer install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check strict types
+        run: bash tools/check-strict-types.sh
+
+  tests:
+    name: 快档：测试（PHP ${{ matrix.php }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer
+      - name: composer update
+        run: composer update --no-interaction --prefer-dist
+      - name: run tests
+        run: php tools/run-tests.php
+    # 本仓测试均为独立 PHP 断言脚本、不连数据库，故不设数据库服务矩阵。
+    # 将来新增 DB 测试时按 v4 L-1 双库口径补矩阵：postgres:16 ×
+    # mysql:8.0（= 8.0 系列最后一个版本 8.0.46）× mysql:8.4（LTS）。
+
+  naming:
+    name: 快档：命名检查（diff 口径）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 生成 PR diff
+        run: |
+          git fetch origin main --quiet
+          git diff origin/main...HEAD > /tmp/pr.diff
+      - name: code --diff
+        run: python3 tools/naming_check.py code --diff /tmp/pr.diff --allow naming-allow.txt
+      - name: notes --diff
+        run: python3 tools/naming_check.py notes --diff /tmp/pr.diff
+      - name: terms
+        run: python3 tools/naming_check.py terms tools/naming-terms.tsv --diff /tmp/pr.diff --allow naming-allow.txt
+
+  deps:
+    name: 快档：依赖方向
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check deps
+        run: bash tools/check-deps.sh
+
+  dev-refs:
+    name: 快档：dev-only 引用门禁
+    # 与本地 tools/pre-merge.sh --fast 第 3 步同款命令；脚本只扫
+    # git ls-files 与纯 PHP 文件，不需要 composer install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: check dev refs
+        run: php tools/check-dev-refs.php
+
+  baselines:
+    name: 快档：基线只减不增
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 比对基线文件行数
+        # 三个基线文件行数对 origin/main 只许减不许加（2598 条只减不能加），
+        # main 上没有的文件按 0 行算；任一文件变多即 fail 并打印差值。
+        # bootstrap：本检查项还没进 main 时基线闸属首次落地，闸不拦自己
+        # 出生——增长随本 PR 人审（M-09），只 WARN；合并后自动转硬 fail。
+        run: |
+          git fetch origin main --quiet
+          if git show origin/main:.github/workflows/merge-gates.yml 2>/dev/null | grep -q '基线只减不增'; then
+            bootstrap=0
+          else
+            bootstrap=1
+          fi
+          fail=0
+          for f in phpstan-baseline.neon naming-allow.txt tools/strict-types-baseline.txt; do
+            before=$(git show "origin/main:${f}" 2>/dev/null | wc -l | tr -d ' ')
+            if [ -f "${f}" ]; then
+              after=$(wc -l < "${f}" | tr -d ' ')
+            else
+              after=0
+            fi
+            if [ "${after}" -gt "${before}" ]; then
+              if [ "${bootstrap}" -eq 1 ]; then
+                echo "[WARN] ${f}：${before} 行 → ${after} 行（+$((after - before))）"
+              else
+                echo "[FAIL] ${f}：${before} 行 → ${after} 行（+$((after - before))），基线只许减不许加"
+                fail=1
+              fi
+            else
+              echo "[PASS] ${f}：${before} 行 → ${after} 行"
+            fi
+          done
+          if [ "${bootstrap}" -eq 1 ]; then
+            echo "[WARN] 基线闸首次落地，增长部分随本 PR 人审；合并入 main 后本检查生效"
+          fi
+          exit "${fail}"

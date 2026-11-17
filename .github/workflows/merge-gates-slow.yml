@@ -1,0 +1,54 @@
+name: merge-gates-slow（慢档）
+
+# 两档门禁中的慢档（R-8）：成本高、不要求秒级反馈的检查不挡 PR，
+# 只在 main push、每日定时、手动触发时跑，红了由人跟进。
+# 快档（PHPStan / 测试 / 命名 / 依赖方向 / 基线行数）在 merge-gates.yml。
+# 本地同款：tools/pre-merge.sh --full。
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # UTC 18:00 每天一次（北京时间 02:00）
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: 慢档：依赖审计
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer
+      - name: composer validate --strict
+        run: composer validate --strict
+      - name: composer update
+        # 库仓不入库 lock，audit 要有解析过的依赖树可查，先现场解析
+        run: composer update --no-interaction --prefer-dist
+      - name: composer audit
+        # audit 不带 --locked（无 lock 可锁）；返回非零即如实失败
+        run: composer audit
+
+  e2e-slot:
+    name: 慢档：e2e/集成（仓内暂无套件，槽位）
+    runs-on: ubuntu-latest
+    # 套件未落地前此检查项必红；continue-on-error 让它如实显示但不阻断
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: 检测 e2e/集成套件是否落地
+        # 套件落地后删掉 continue-on-error 并接真实执行，DB 服务矩阵按
+        # v4 L-1 三库口径：postgres:16 × mysql:8.0 × mysql:8.4
+        run: |
+          if [ -d tests/e2e ] || [ -d tests/integration ]; then
+            echo "e2e/集成套件已落地，请接入真实执行步骤"
+            exit 0
+          fi
+          echo "套件未落地，槽位先占"
+          exit 1

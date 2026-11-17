@@ -52,12 +52,16 @@ PHP ≥8.2（Webman/Workerman，PSR-12/PSR-4）+ Vue3/TS 前端。完整规范�
 
 ## 测试和检查命令
 
+- `tools/pre-merge.sh`：合并前门禁一键跑完（PHPStan、测试、命名检查、依赖方向），与 `.github/workflows/merge-gates.yml` 同一套命令。
 - `composer run sand:publish`（= `php tools/publish-frontend.php`，把前端源码发布到宿主 `sandadmin-artd/`）。
-- `php tests/http-error-data-test.php`、`php tests/phase1-fixes.php`、`php tests/secret-exposure-test.php`（直接执行，无 phpunit）。
+- `php tests/http-error-data-test.php`、`php tests/phase1-fixes.php`、`php tests/secret-exposure-test.php`（直接执行，无 phpunit）；`php tools/run-tests.php` 一次跑完 tests/ 全部断言与发布回环。
 - `php tools/assert-frontend-parity.php`、`php tools/assert-publish-exclusions.php`（发布产物断言）。
+- `vendor/bin/phpstan analyse`（level max，存量错误登记 `phpstan-baseline.neon`，口径 = 不新增错误）。
+- `bash tools/check-deps.sh`（依赖方向：发布器层不依赖插件层，插件层不反向依赖宿主/其他插件/旧上游）。
+- `python3 tools/naming_check.py code|notes --diff` / `terms tools/naming-terms.tsv`（命名自查，词表副本在 tools/）。
 - `php tools/check-dev-refs.php`（dev-only 引用门禁；清单 `tools/dev-only-paths.txt` 随包分发，下游打包按 `tools/strip-dev.php` 剔除）。
 - 前端：`cd sandadmin-artd && pnpm dev` / `pnpm lint` / `pnpm build`（含 `vue-tsc --noEmit`）/ `pnpm lint:prettier` / `pnpm lint:stylelint`；Node ≥20.19、pnpm 固定 11.19.0。
-- 无 CI；本地开发用 `pnpm dev`，不做多余构建。
+- CI：`.github/workflows/merge-gates.yml`（PR 与 push 到 main 触发）。现有测试均为独立断言脚本、不连数据库，无 DB 矩阵；新增 DB 测试时按 postgres 16 / MySQL 8.0 系列末版 / MySQL 8.4 LTS 三档补矩阵。本地开发用 `pnpm dev`，不做多余构建。
 
 ## 许可证
 

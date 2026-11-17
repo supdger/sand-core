@@ -1,0 +1,18 @@
+# PHPStan 合并门禁配置（v4 T-8：最高级别，不降级）。
+# 存量旧代码的 2598 条报错登记在 phpstan-baseline.neon（首次接入门禁
+# 时全量生成）；门禁口径 = level max 下不新增错误。整改存量代码时
+# 从 baseline 里逐条删除，不反向新增条目。
+
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: max
+    paths:
+        - server/
+        - tools/
+        - tests/
+    excludePaths:
+        - server/plugin/sandadmin/public/*
+        - server/plugin/sandadmin/utils/code/stub/*
+    tmpDir: .phpstan-cache

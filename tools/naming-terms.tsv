@@ -1,0 +1,10 @@
+# 标准词	不要用的词
+dept	department,org_unit
+file	attachment
+create_time	created_at,create_at
+update_time	updated_at,update_at
+delete_time	deleted_at,delete_at
+task	job
+dict_type	dict_group
+audit_log	operation_log
+cancelled	canceled
