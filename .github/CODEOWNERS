@@ -1,0 +1,8 @@
+# 门禁自保护（v4 T-8 / U-6 / M-09）：以下门禁文件改动必须人审，
+# 基线与豁免只减不增；AI 提交不算自批。
+/.github/CODEOWNERS @supdger
+/.github/workflows/ @supdger
+/tools/ @supdger
+/naming-allow.txt @supdger
+/phpstan.neon.dist @supdger
+/phpstan-baseline.neon @supdger
