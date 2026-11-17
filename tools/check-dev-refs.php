@@ -34,6 +34,9 @@ const DEV_REF_WHITELIST = [
     'tools/dev-manifest.php',
     'tools/strip-dev.php',
     'tools/check-dev-refs.php',
+    // PHPStan 基线逐字登记存量报错文本，dev-only 符号以报错信息字面量
+    // 出现，属门禁工具数据而非代码引用
+    'phpstan-baseline.neon',
     // tests/ 不进发布面（export-ignore 与 archive.exclude 双通道排除），
     // 测试代码合法引用 dev 符号，不需要登记
     'tests',
@@ -130,10 +133,16 @@ function findStaleRmEntries(array $files, array $rm): array
     return $stale;
 }
 
-if (PHP_SAPI === 'cli' && realpath((string) ($_SERVER['argv'][0] ?? '')) === __FILE__) {
+$argv = $_SERVER['argv'] ?? [];
+if (!is_array($argv)) {
+    $argv = [];
+}
+$argv = array_values(array_filter($argv, 'is_string'));
+
+if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === __FILE__) {
     $root = dirname(__DIR__);
-    $pos = array_search('--dir', $_SERVER['argv'], true);
-    $dir = $pos === false ? null : ($_SERVER['argv'][$pos + 1] ?? null);
+    $pos = array_search('--dir', $argv, true);
+    $dir = $pos === false ? null : ($argv[$pos + 1] ?? null);
     if ($pos !== false && ($dir === null || str_starts_with($dir, '--'))) {
         fwrite(STDERR, "用法：php tools/check-dev-refs.php [--dir <目录>]\n");
         exit(2);

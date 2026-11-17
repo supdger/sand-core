@@ -60,6 +60,7 @@ function matchDevPath(string $pattern, string $path): bool
     return preg_match('#^' . $regex . '$#', $path) === 1;
 }
 
+/** @param list<string> $patterns */
 function matchAnyDevPath(array $patterns, string $path): bool
 {
     foreach ($patterns as $pattern) {
@@ -80,10 +81,10 @@ function matchAnyDevPath(array $patterns, string $path): bool
 function verifyDevManifest(string $root, array $manifest): array
 {
     $left = [];
-    $wildcard = array_filter(
+    $wildcard = array_values(array_filter(
         $manifest['rm'],
         static fn (string $entry): bool => str_contains($entry, '*') || str_contains($entry, '?'),
-    );
+    ));
     foreach ($manifest['rm'] as $pattern) {
         if (in_array($pattern, $wildcard, true)) {
             continue;

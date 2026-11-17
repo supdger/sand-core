@@ -92,20 +92,26 @@ function removeDevTree(string $dir): void
     rmdir($dir);
 }
 
-if (PHP_SAPI === 'cli' && realpath((string) ($_SERVER['argv'][0] ?? '')) === __FILE__) {
-    $root = realpath((string) ($_SERVER['argv'][1] ?? ''));
-    $verifyOnly = in_array('--verify', $_SERVER['argv'], true);
-    $reapply = in_array('--reapply', $_SERVER['argv'], true);
-    $manifestPos = array_search('--manifest', $_SERVER['argv'], true);
+$argv = $_SERVER['argv'] ?? [];
+if (!is_array($argv)) {
+    $argv = [];
+}
+$argv = array_values(array_filter($argv, 'is_string'));
+
+if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === __FILE__) {
+    $root = realpath($argv[1] ?? '');
+    $verifyOnly = in_array('--verify', $argv, true);
+    $reapply = in_array('--reapply', $argv, true);
+    $manifestPos = array_search('--manifest', $argv, true);
     $manifestPath = $manifestPos === false
         ? dirname(__DIR__) . '/tools/dev-only-paths.txt'
-        : ($_SERVER['argv'][$manifestPos + 1] ?? null);
+        : ($argv[$manifestPos + 1] ?? null);
     if ($root === false || !is_dir($root)) {
         fwrite(STDERR, "用法：php tools/strip-dev.php <导出根目录> [--verify|--reapply] [--manifest <清单路径>]\n");
         exit(2);
     }
     if (!is_string($manifestPath) || !is_file($manifestPath)) {
-        fwrite(STDERR, "FAIL 清单文件不存在：{$manifestPath}\n");
+        fwrite(STDERR, 'FAIL 清单文件不存在：' . var_export($manifestPath, true) . "\n");
         exit(2);
     }
     try {
