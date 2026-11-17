@@ -8,8 +8,10 @@ Route::group('/core', function () {
 
     Route::get('/captcha', [plugin\sandadmin\app\controller\LoginController::class, 'captcha']);
     Route::post('/login', [plugin\sandadmin\app\controller\LoginController::class, 'login']);
+    // SAND-DEV-BEGIN
     Route::get('/dev-login/available', [plugin\sandadmin\app\controller\DevLoginController::class, 'available']);
     Route::post('/dev-login', [plugin\sandadmin\app\controller\DevLoginController::class, 'login']);
+    // SAND-DEV-END
 
     Route::get('/system/user', [plugin\sandadmin\app\controller\SystemController::class, 'userInfo']);
     Route::get("/system/dictAll", [plugin\sandadmin\app\controller\SystemController::class, 'dictAll']);

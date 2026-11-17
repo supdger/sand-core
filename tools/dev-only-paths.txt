@@ -1,0 +1,34 @@
+# 开发专用代码清单：只在开发源码树存在，下游生产打包时整段剔除。
+# 本清单随 Composer 包分发（tools/ 不在 PublishExclusions 排除面），
+# 下游打包流程对本包安装树与已发布的 plugin/sandadmin/ 载荷副本应用本清单。
+#
+# 语法（路径相对包根，正斜杠）：
+#   rm <路径>     发布时删除该文件或目录；目录递归删除整个子树；
+#               允许 *（单段通配）与 **（跨段通配，兼容零段目录），
+#               如 web/src/**/*.test.ts 同时命中 src 直属与子目录测试文件
+#   strip <路径>  该文件含哨兵块，打包时删除 SAND-DEV-BEGIN 到
+#               SAND-DEV-END 之间的所有行（含标记行）；哨兵用该语言
+#               的行注释写（PHP 用 //），必须成对、不嵌套
+#
+# 规矩：
+#   - 新增开发专用代码必须登记进本清单，否则 tools/check-dev-refs.php
+#     门禁失败；含哨兵块的文件也必须用 strip 登记，哨兵块之外不得再
+#     出现 dev 符号，门禁会按剔除后的内容再扫一遍。
+#   - 下游用法：对 vendor/supdger/sand-core/ 安装树整包应用本清单；
+#     对宿主 plugin/sandadmin/ 载荷副本，把条目去掉
+#     server/plugin/sandadmin/ 前缀后按同一清单复剔。
+#   - tests/ 不进入发布面（export-ignore 与 archive.exclude 双通道
+#     排除），dev 符号在测试代码中合法，不需要登记。
+#   - 本清单自身与 tools/ 下的剔除、门禁脚本必须随包分发，不得登记 rm。
+
+# ── 开发免登录链（/core/dev-login*）：控制器与门禁整文件剔除 ──
+rm server/plugin/sandadmin/app/controller/DevLoginController.php
+rm server/plugin/sandadmin/utils/DevLoginGuard.php
+
+# ── 含哨兵块的生产文件（剔除块后随包发布）─────────────────────
+# route.php：/core/dev-login* 两条路由注册
+# sandadmin.php：dev_login 配置块（SANDADMIN_DEV_LOGIN_* 环境变量）
+# SystemUserLogic.php：DevLoginGuard 的 use 行与 devLogin() 签发方法
+strip server/plugin/sandadmin/config/route.php
+strip server/plugin/sandadmin/config/sandadmin.php
+strip server/plugin/sandadmin/app/logic/system/SystemUserLogic.php

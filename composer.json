@@ -75,10 +75,14 @@
     ],
     "sand:check-http-install": [
       "@php tools/assert-no-http-install.php"
+    ],
+    "sand:check-dev-refs": [
+      "@php tools/check-dev-refs.php"
     ]
   },
   "scripts-descriptions": {
     "sand:publish": "Publish or reconcile the sandadmin-artd frontend payload (idempotent)",
-    "sand:check-http-install": "Fail if an HTTP install route exists or /install survives a production route build"
+    "sand:check-http-install": "Fail if an HTTP install route exists or /install survives a production route build",
+    "sand:check-dev-refs": "Fail if a dev-only reference survives outside tools/dev-only-paths.txt"
   }
 }

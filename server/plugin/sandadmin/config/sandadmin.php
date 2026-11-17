@@ -8,11 +8,13 @@ return [
 
     'access_exp' => 8 * 60 * 60, // 登录token有效期，默认8小时
 
+    // SAND-DEV-BEGIN
     // 开发本机登录：默认关闭；生产环境即使开启也会被拒绝，见 utils/DevLoginGuard
     'dev_login' => [
         'enabled' => env('SANDADMIN_DEV_LOGIN_ENABLED', false),
         'username' => env('SANDADMIN_DEV_LOGIN_USERNAME', ''),
     ],
+    // SAND-DEV-END
 
 	// 验证码存储模式
     'captcha' => [
