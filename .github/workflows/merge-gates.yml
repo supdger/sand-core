@@ -1,21 +1,20 @@
-name: merge-gates
+name: merge-gates（快档）
 
-# 1.x 合并前门禁（v4 T-8 / U-6 同一口径落到本仓）：
-# PHPStan level max、测试、命名检查、依赖方向，全过才许合并。
-# 本地同款：tools/pre-merge.sh。
+# 两档门禁中的快档（v4 T-8 / U-6 口径 + R-8 两档拆分）：
+# PHPStan level max、测试、命名检查、依赖方向、基线行数，全过才许合并。
+# 慢档（依赖审计、e2e/集成槽位）在 merge-gates-slow.yml，不挡 PR。
+# 本地同款：tools/pre-merge.sh --fast。
 
 on:
   pull_request:
-    branches: [main]
   push:
-    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   phpstan:
-    name: PHPStan level max
+    name: 快档：PHPStan level max
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +32,7 @@ jobs:
         run: vendor/bin/phpstan analyse --no-progress
 
   tests:
-    name: 测试（PHP ${{ matrix.php }}）
+    name: 快档：测试（PHP ${{ matrix.php }}）
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -54,7 +53,7 @@ jobs:
     # mysql:8.0（= 8.0 系列最后一个版本 8.0.46）× mysql:8.4（LTS）。
 
   naming:
-    name: 命名检查（diff 口径）
+    name: 快档：命名检查（diff 口径）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,9 +71,38 @@ jobs:
         run: python3 tools/naming_check.py terms tools/naming-terms.tsv --diff /tmp/pr.diff --allow naming-allow.txt
 
   deps:
-    name: 依赖方向
+    name: 快档：依赖方向
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: check deps
         run: bash tools/check-deps.sh
+
+  baselines:
+    name: 快档：基线只减不增
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 比对基线文件行数
+        # 三个基线文件行数对 origin/main 只许减不许加（2598 条只减不能加），
+        # main 上没有的文件按 0 行算；任一文件变多即 fail 并打印差值
+        run: |
+          git fetch origin main --quiet
+          fail=0
+          for f in phpstan-baseline.neon naming-allow.txt tools/strict-types-baseline.txt; do
+            before=$(git show "origin/main:${f}" 2>/dev/null | wc -l | tr -d ' ')
+            if [ -f "${f}" ]; then
+              after=$(wc -l < "${f}" | tr -d ' ')
+            else
+              after=0
+            fi
+            if [ "${after}" -gt "${before}" ]; then
+              echo "[FAIL] ${f}：${before} 行 → ${after} 行（+$((after - before))），基线只许减不许加"
+              fail=1
+            else
+              echo "[PASS] ${f}：${before} 行 → ${after} 行"
+            fi
+          done
+          exit "${fail}"
