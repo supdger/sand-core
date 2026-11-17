@@ -14,7 +14,9 @@ use plugin\sandadmin\app\model\system\SystemRole;
 use plugin\sandadmin\app\model\system\SystemUser;
 use plugin\sandadmin\exception\ApiException;
 use plugin\sandadmin\basic\think\BaseLogic;
+// SAND-DEV-BEGIN
 use plugin\sandadmin\utils\DevLoginGuard;
+// SAND-DEV-END
 use plugin\sandadmin\utils\ForcedPasswordChange;
 use plugin\sandadmin\utils\JwtSecretGuard;
 use Webman\Event\Event;
@@ -245,6 +247,7 @@ class SystemUserLogic extends BaseLogic
         return $this->issueToken($admin, $type, $message);
     }
 
+    // SAND-DEV-BEGIN
     /**
      * 开发本机登录：跳过密码校验，签发与审计流程与 login() 一致。
      * 入口可用性由 DevLoginGuard 在控制器判定；返回 null 表示配置账号不存在或被禁用。
@@ -269,6 +272,7 @@ class SystemUserLogic extends BaseLogic
         }
         return $this->issueToken($admin, $type, '开发本机登录');
     }
+    // SAND-DEV-END
 
     /**
      * 更新登录足迹、签发令牌并写登录审计。
