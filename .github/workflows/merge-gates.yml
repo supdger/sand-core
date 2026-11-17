@@ -31,6 +31,16 @@ jobs:
         # 存量 2598 条登记在 phpstan-baseline.neon，本步保证不新增错误
         run: vendor/bin/phpstan analyse --no-progress
 
+  strict-types:
+    name: 快档：strict types 与禁用写法
+    # 新增违规（命中 − 基线）即 fail，挡住不改基线直接加违规的绕过路径；
+    # 脚本只用 git + grep，不需要 composer install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check strict types
+        run: bash tools/check-strict-types.sh
+
   tests:
     name: 快档：测试（PHP ${{ matrix.php }}）
     runs-on: ubuntu-latest
