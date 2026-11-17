@@ -61,7 +61,7 @@ fi
 
 step() { echo "=== $1 ==="; }
 
-step "1/6 PHPStan level max"
+step "1/7 PHPStan level max"
 if [ ! -x vendor/bin/phpstan ]; then
     echo "[FAIL] vendor/bin/phpstan 不存在，先执行 composer install"
     fail=1
