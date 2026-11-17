@@ -1,5 +1,7 @@
 /.idea/
 /.vscode/
+/vendor/
+/.phpstan-cache/
 /**/.DS_Store
 /sandadmin-artd/node_modules/
 /sandadmin-artd/dist/

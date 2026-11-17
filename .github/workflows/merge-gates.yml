@@ -1,0 +1,73 @@
+name: merge-gates
+
+# 1.x 合并前门禁（v4 T-8 / U-6 同一口径落到本仓）：
+# PHPStan level max、测试、命名检查、依赖方向，全过才许合并。
+# 本地同款：tools/pre-merge.sh。
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  phpstan:
+    name: PHPStan level max
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+      - name: composer install
+        run: composer install --no-interaction --prefer-dist
+      - name: phpstan analyse
+        # 存量 2598 条登记在 phpstan-baseline.neon，本步保证不新增错误
+        run: vendor/bin/phpstan analyse --no-progress
+
+  tests:
+    name: 测试（独立断言脚本）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+      - name: composer install
+        run: composer install --no-interaction --prefer-dist
+      - name: run tests
+        run: php tools/run-tests.php
+    # 本仓测试均为独立 PHP 断言脚本、不连数据库，故不设数据库服务矩阵。
+    # 将来新增 DB 测试时按 v4 L-1 双库口径补矩阵：postgres:16 ×
+    # mysql:8.0（= 8.0 系列最后一个版本 8.0.46）× mysql:8.4（LTS）。
+
+  naming:
+    name: 命名检查（diff 口径）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 生成 PR diff
+        run: |
+          git fetch origin main --quiet
+          git diff origin/main...HEAD > /tmp/pr.diff
+      - name: code --diff
+        run: python3 tools/naming_check.py code --diff /tmp/pr.diff --allow naming-allow.txt
+      - name: notes --diff
+        run: python3 tools/naming_check.py notes --diff /tmp/pr.diff
+      - name: terms
+        run: python3 tools/naming_check.py terms tools/naming-terms.tsv --diff /tmp/pr.diff --allow naming-allow.txt
+
+  deps:
+    name: 依赖方向
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check deps
+        run: bash tools/check-deps.sh
