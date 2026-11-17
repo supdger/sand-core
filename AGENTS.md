@@ -55,6 +55,7 @@ PHP ≥8.2（Webman/Workerman，PSR-12/PSR-4）+ Vue3/TS 前端。完整规范�
 - `composer run sand:publish`（= `php tools/publish-frontend.php`，把前端源码发布到宿主 `sandadmin-artd/`）。
 - `php tests/http-error-data-test.php`、`php tests/phase1-fixes.php`、`php tests/secret-exposure-test.php`（直接执行，无 phpunit）。
 - `php tools/assert-frontend-parity.php`、`php tools/assert-publish-exclusions.php`（发布产物断言）。
+- `php tools/check-dev-refs.php`（dev-only 引用门禁；清单 `tools/dev-only-paths.txt` 随包分发，下游打包按 `tools/strip-dev.php` 剔除）。
 - 前端：`cd sandadmin-artd && pnpm dev` / `pnpm lint` / `pnpm build`（含 `vue-tsc --noEmit`）/ `pnpm lint:prettier` / `pnpm lint:stylelint`；Node ≥20.19、pnpm 固定 11.19.0。
 - 无 CI；本地开发用 `pnpm dev`，不做多余构建。
 
