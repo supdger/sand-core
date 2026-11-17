@@ -88,6 +88,20 @@ jobs:
       - name: check deps
         run: bash tools/check-deps.sh
 
+  dev-refs:
+    name: 快档：dev-only 引用门禁
+    # 与本地 tools/pre-merge.sh --fast 第 3 步同款命令；脚本只扫
+    # git ls-files 与纯 PHP 文件，不需要 composer install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: check dev refs
+        run: php tools/check-dev-refs.php
+
   baselines:
     name: 快档：基线只减不增
     runs-on: ubuntu-latest
