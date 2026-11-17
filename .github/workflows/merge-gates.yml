@@ -97,9 +97,16 @@ jobs:
           fetch-depth: 0
       - name: 比对基线文件行数
         # 三个基线文件行数对 origin/main 只许减不许加（2598 条只减不能加），
-        # main 上没有的文件按 0 行算；任一文件变多即 fail 并打印差值
+        # main 上没有的文件按 0 行算；任一文件变多即 fail 并打印差值。
+        # bootstrap：本检查项还没进 main 时基线闸属首次落地，闸不拦自己
+        # 出生——增长随本 PR 人审（M-09），只 WARN；合并后自动转硬 fail。
         run: |
           git fetch origin main --quiet
+          if git show origin/main:.github/workflows/merge-gates.yml 2>/dev/null | grep -q '基线只减不增'; then
+            bootstrap=0
+          else
+            bootstrap=1
+          fi
           fail=0
           for f in phpstan-baseline.neon naming-allow.txt tools/strict-types-baseline.txt; do
             before=$(git show "origin/main:${f}" 2>/dev/null | wc -l | tr -d ' ')
@@ -109,10 +116,17 @@ jobs:
               after=0
             fi
             if [ "${after}" -gt "${before}" ]; then
-              echo "[FAIL] ${f}：${before} 行 → ${after} 行（+$((after - before))），基线只许减不许加"
-              fail=1
+              if [ "${bootstrap}" -eq 1 ]; then
+                echo "[WARN] ${f}：${before} 行 → ${after} 行（+$((after - before))）"
+              else
+                echo "[FAIL] ${f}：${before} 行 → ${after} 行（+$((after - before))），基线只许减不许加"
+                fail=1
+              fi
             else
               echo "[PASS] ${f}：${before} 行 → ${after} 行"
             fi
           done
+          if [ "${bootstrap}" -eq 1 ]; then
+            echo "[WARN] 基线闸首次落地，增长部分随本 PR 人审；合并入 main 后本检查生效"
+          fi
           exit "${fail}"
